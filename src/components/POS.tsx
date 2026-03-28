@@ -984,10 +984,10 @@ export default function POS() {
                 </div>
 
                 <div className="text-center border-t border-dashed border-gray-300 pt-2 mt-4">
-                  <p className="font-bold text-xs mb-1">ALL AMOUNTS ARE INCLUSIVE OF VAT</p>
+                  <p className="font-bold text-xs mb-1 uppercase">All goods are inclusive of vat</p>
                   <p>THANK YOU FOR SHOPPING WITH US!</p>
                   <p>Goods once sold are not returnable.</p>
-                  <p className="mt-1 text-[8px] opacity-50">Created by Noxira labs</p>
+                  <p className="mt-1 text-[8px] opacity-50">Created by Noxira labs(+254 701137747)</p>
                 </div>
               </div>
 
@@ -1080,10 +1080,10 @@ export default function POS() {
           </div>
 
           <div className="text-center">
-            <p className="font-bold mb-1">ALL AMOUNTS ARE INCLUSIVE OF VAT</p>
+            <p className="font-bold mb-1 uppercase">All goods are inclusive of vat</p>
             <p>THANK YOU FOR SHOPPING WITH US!</p>
             <p>GOODS ONCE SOLD ARE NOT RETURNABLE</p>
-            <p className="mt-4">Created by Noxira labs</p>
+            <p className="mt-4">Created by Noxira labs(+254 701137747)</p>
             <p className="mt-2">********************************</p>
           </div>
         </div>

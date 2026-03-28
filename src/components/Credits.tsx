@@ -435,8 +435,9 @@ export default function Credits() {
 
           <div className="text-center mt-12 text-[10px]">
             <p>********************************</p>
+            <p className="font-bold mb-1 uppercase">All goods are inclusive of vat</p>
             <p>THANK YOU FOR YOUR PAYMENT</p>
-            <p className="mt-2">Created by Noxira labs</p>
+            <p className="mt-2">Created by Noxira labs(+254 701137747)</p>
           </div>
         </div>
       )}

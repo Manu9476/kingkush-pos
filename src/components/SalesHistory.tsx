@@ -558,8 +558,9 @@ export default function SalesHistory() {
             </div>
 
             <div className="text-center border-t border-dashed border-gray-300 pt-4 mt-4">
+              <p className="font-bold mb-1 uppercase">All goods are inclusive of vat</p>
               <p>REFUND PROCESSED SUCCESSFULLY</p>
-              <p className="mt-2 text-[10px]">Created by Noxira labs</p>
+              <p className="mt-2 text-[10px]">Created by Noxira labs(+254 701137747)</p>
             </div>
           </>
         )}

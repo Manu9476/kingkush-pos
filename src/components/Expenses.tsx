@@ -614,8 +614,9 @@ export default function Expenses() {
 
           <div className="text-center mt-12 text-[10px]">
             <p>********************************</p>
+            <p className="font-bold mb-1 uppercase">All goods are inclusive of vat</p>
             <p>INTERNAL SHOP DOCUMENT</p>
-            <p className="mt-2">Created by Noxira labs</p>
+            <p className="mt-2">Created by Noxira labs(+254 701137747)</p>
           </div>
         </div>
       )}
