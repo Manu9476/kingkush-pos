@@ -350,9 +350,11 @@ async function fetchRemoteStore(): Promise<LocalStore | null> {
     if (!payload || !isValidLocalStore(payload.store)) {
       return null;
     }
+    console.log('✅ Successfully connected to Cloud Database.');
     remoteStatus = 'enabled';
     return payload.store;
-  } catch {
+  } catch (error) {
+    console.error('❌ Cloud Database Fetch Error:', error);
     if (remoteStatus === 'unknown') {
       remoteStatus = 'disabled';
     }
@@ -373,7 +375,8 @@ async function pushRemoteStore(snapshot: LocalStore) {
       throw new Error(`Remote store write failed with status ${response.status}`);
     }
     remoteStatus = 'enabled';
-  } catch {
+  } catch (error) {
+    console.error('❌ Cloud Database Write Error:', error);
     if (remoteStatus === 'unknown') {
       remoteStatus = 'disabled';
     }
