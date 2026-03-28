@@ -192,6 +192,38 @@ function isDateLikeFieldName(fieldName: string | null) {
 }
 
 function tryParseDateLikeValue(raw: unknown) {
+  if (raw && typeof raw === 'object') {
+    const candidate = raw as Record<string, unknown>;
+
+    if (typeof candidate.toDate === 'function') {
+      try {
+        const date = candidate.toDate() as Date;
+        if (date instanceof Date && !Number.isNaN(date.getTime())) {
+          return Timestamp.fromDate(date);
+        }
+      } catch {
+        // Ignore and try other known shapes.
+      }
+    }
+
+    const seconds = typeof candidate.seconds === 'number'
+      ? candidate.seconds
+      : typeof candidate._seconds === 'number'
+        ? candidate._seconds
+        : null;
+
+    const nanos = typeof candidate.nanoseconds === 'number'
+      ? candidate.nanoseconds
+      : typeof candidate._nanoseconds === 'number'
+        ? candidate._nanoseconds
+        : 0;
+
+    if (seconds !== null) {
+      const millis = seconds * 1000 + Math.floor(nanos / 1_000_000);
+      return Timestamp.fromMillis(millis);
+    }
+  }
+
   if (typeof raw === 'string') {
     const millis = Date.parse(raw);
     if (!Number.isNaN(millis)) {
