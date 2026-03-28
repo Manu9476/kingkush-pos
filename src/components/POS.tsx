@@ -1,0 +1,1092 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  db, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  onSnapshot,
+  addDoc, 
+  writeBatch, 
+  doc, 
+  serverTimestamp, 
+  increment,
+  limit,
+  orderBy,
+  updateDoc,
+  getDoc,
+  handleFirestoreError,
+  OperationType
+} from '../data';
+import { Product, Sale, SaleItem, Customer, SystemSettings } from '../types';
+import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Printer, X, User as UserIcon, Shield, Zap, Receipt, History, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../App';
+import JsBarcode from 'jsbarcode';
+import { toast } from 'sonner';
+import ConfirmDialog from './ConfirmDialog';
+
+import { recordAuditLog } from '../services/auditService';
+
+export default function POS() {
+  const { user } = useAuth();
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [cart, setCart] = useState<(Product & { quantity: number })[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'credit'>('cash');
+  const [amountPaid, setAmountPaid] = useState<number>(0);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [lastSale, setLastSale] = useState<Sale | null>(null);
+  const [lastSaleItems, setLastSaleItems] = useState<(Product & { quantity: number })[]>([]);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [isScannerFocused, setIsScannerFocused] = useState(true);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+  
+  const [customerName, setCustomerName] = useState('');
+  const [customerId, setCustomerId] = useState('');
+  const [customerBalance, setCustomerBalance] = useState<number>(0);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerSearchResults, setCustomerSearchResults] = useState<Customer[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [reference, setReference] = useState('');
+  const isManualAmountPaid = useRef(false);
+  
+  const [quickSearchQuery, setQuickSearchQuery] = useState('');
+  const [quickSearchResults, setQuickSearchResults] = useState<Product[]>([]);
+  const [hotItems, setHotItems] = useState<Product[]>([]);
+
+  // Confirm Dialog State
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+  
+  const inputRef = useRef<HTMLInputElement>(null);
+  const quickSearchRef = useRef<HTMLDivElement>(null);
+  const customerSearchRef = useRef<HTMLDivElement>(null);
+  const customerInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (quickSearchRef.current && !quickSearchRef.current.contains(event.target as Node)) {
+        setQuickSearchResults([]);
+      }
+      if (customerSearchRef.current && !customerSearchRef.current.contains(event.target as Node)) {
+        setShowCustomerDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'system'));
+        if (settingsDoc.exists()) {
+          setSettings(settingsDoc.data() as SystemSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  useEffect(() => {
+    setHotItems(allProducts.filter(p => p.isHotItem));
+  }, [allProducts]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubProducts = onSnapshot(collection(db, 'products'), 
+      (snapshot) => {
+        setAllProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'products')
+    );
+    const unsubCustomers = onSnapshot(collection(db, 'customers'), 
+      (snapshot) => {
+        setAllCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'customers')
+    );
+    return () => {
+      unsubProducts();
+      unsubCustomers();
+    };
+  }, [user]);
+
+  useEffect(() => {
+    const queryText = customerSearchQuery.trim().toLowerCase();
+    if (queryText.length < 1) {
+      setCustomerSearchResults([]);
+      return;
+    }
+
+    const results = allCustomers.filter(c => 
+      c.name.toLowerCase().includes(queryText) ||
+      c.customerCode?.toLowerCase().includes(queryText) ||
+      c.phone?.includes(queryText) ||
+      c.email?.toLowerCase().includes(queryText)
+    ).slice(0, 5);
+    
+    setCustomerSearchResults(results);
+  }, [customerSearchQuery, allCustomers]);
+
+  useEffect(() => {
+    const fetchCustomerBalance = async () => {
+      if (!customerId) {
+        setCustomerBalance(0);
+        return;
+      }
+
+      try {
+        const q = query(
+          collection(db, 'credits'),
+          where('customerId', '==', customerId),
+          where('status', '==', 'open')
+        );
+        const snapshot = await getDocs(q);
+        const balance = snapshot.docs.reduce((sum, doc) => sum + (doc.data().outstandingBalance || 0), 0);
+        setCustomerBalance(balance);
+      } catch (error) {
+        console.error('Error fetching customer balance:', error);
+      }
+    };
+
+    fetchCustomerBalance();
+  }, [customerId]);
+
+  useEffect(() => {
+    const queryText = quickSearchQuery.trim().toLowerCase();
+    if (queryText.length < 1) {
+      setQuickSearchResults([]);
+      return;
+    }
+
+    const results = allProducts.filter(p => 
+      p.name.toLowerCase().includes(queryText) ||
+      p.sku.toLowerCase().includes(queryText) ||
+      p.barcode.toLowerCase().includes(queryText)
+    ).slice(0, 10);
+    
+    setQuickSearchResults(results);
+  }, [quickSearchQuery, allProducts]);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Keyboard Shortcuts
+      if (e.key === 'F9') {
+        e.preventDefault();
+        handleCheckout();
+      } else if (e.key === 'F2') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      } else if (e.key === 'F4') {
+        e.preventDefault();
+        customerInputRef.current?.focus();
+      } else if (e.key === 'Escape') {
+        if (showReceipt) {
+          setShowReceipt(false);
+        } else if (cart.length > 0) {
+          setConfirmConfig({
+            isOpen: true,
+            title: 'Clear Cart',
+            message: 'Are you sure you want to clear the current cart?',
+            onConfirm: () => setCart([]),
+            type: 'danger'
+          });
+        }
+      }
+
+      // If we're not in an input, redirect focus to barcode input
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      
+      // Redirect to scanner if not in an input and it's a printable character or scanner prefix
+      if (!isInput && e.key.length === 1) {
+        inputRef.current?.focus();
+      }
+    };
+
+    const handleFocus = () => setIsScannerFocused(true);
+    const handleBlur = () => setIsScannerFocused(false);
+
+    const input = inputRef.current;
+    if (input) {
+      input.addEventListener('focus', handleFocus);
+      input.addEventListener('blur', handleBlur);
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+      if (input) {
+        input.removeEventListener('focus', handleFocus);
+        input.removeEventListener('blur', handleBlur);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleScan = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!barcodeInput.trim()) return;
+
+    let input = barcodeInput.trim();
+    let multiplier = 1;
+
+    // Handle quantity multiplier (e.g., 5*barcode)
+    if (input.includes('*')) {
+      const parts = input.split('*');
+      multiplier = parseInt(parts[0]) || 1;
+      input = parts[1] || '';
+    }
+
+    const queryText = input.toLowerCase();
+    
+    // Try barcode first
+    let product = allProducts.find(p => p.barcode.toLowerCase() === queryText);
+    
+    // If not found by barcode, try SKU
+    if (!product) {
+      product = allProducts.find(p => p.sku.toLowerCase() === queryText);
+    }
+
+    // If still not found, try Name (exact match)
+    if (!product) {
+      product = allProducts.find(p => p.name.toLowerCase() === queryText);
+    }
+    
+    if (!product) {
+      toast.error('Product not found!');
+    } else {
+      if (product.stockQuantity <= 0) {
+        toast.error('Out of stock!');
+        setBarcodeInput('');
+        return;
+      }
+      addToCart(product, multiplier);
+    }
+    setBarcodeInput('');
+  };
+
+  const addToCart = (product: Product, quantity: number = 1) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.id === product.id);
+      if (existing) {
+        const totalQty = existing.quantity + quantity;
+        if (totalQty > product.stockQuantity) {
+          toast.warning(`Only ${product.stockQuantity} items available in stock!`);
+          return prev;
+        }
+        return prev.map(item => 
+          item.id === product.id ? { ...item, quantity: totalQty } : item
+        );
+      }
+      if (quantity > product.stockQuantity) {
+        toast.warning(`Only ${product.stockQuantity} items available in stock!`);
+        return prev;
+      }
+      return [...prev, { ...product, quantity }];
+    });
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart(prev => prev.filter(item => item.id !== productId));
+  };
+
+  const updateQuantity = (productId: string, delta: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.id === productId) {
+        const newQty = item.quantity + delta;
+        if (newQty > 0 && newQty <= item.stockQuantity) {
+          return { ...item, quantity: newQty };
+        }
+      }
+      return item;
+    }));
+  };
+
+  const setQuantity = (productId: string, value: string) => {
+    const newQty = parseInt(value);
+    if (isNaN(newQty)) return;
+    
+    setCart(prev => prev.map(item => {
+      if (item.id === productId) {
+        if (newQty > 0 && newQty <= item.stockQuantity) {
+          return { ...item, quantity: newQty };
+        } else if (newQty > item.stockQuantity) {
+          toast.warning(`Only ${item.stockQuantity} items available in stock!`);
+          return { ...item, quantity: item.stockQuantity };
+        }
+      }
+      return item;
+    }));
+  };
+
+  const subtotal = cart.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0);
+  const taxRate = settings?.taxRate || 0;
+  const taxAmount = (subtotal * taxRate) / 100;
+  const total = subtotal + taxAmount;
+  const subtotalBeforeVAT = subtotal;
+
+  useEffect(() => {
+    // Reset manual flag when cart is cleared
+    if (cart.length === 0) {
+      isManualAmountPaid.current = false;
+    }
+  }, [cart.length]);
+
+  useEffect(() => {
+    // Auto-fill amount paid ONLY if the user hasn't manually changed it
+    // and we are not in credit mode (where 0 is a common starting point)
+    if (!isManualAmountPaid.current && paymentMethod !== 'credit' && total > 0) {
+      setAmountPaid(total);
+    }
+  }, [paymentMethod, total]);
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    if (isNaN(amountPaid) || amountPaid < 0) {
+      toast.error('Please enter a valid amount paid.');
+      return;
+    }
+
+    if (amountPaid < total && paymentMethod === 'cash') {
+      toast.error('Insufficient payment for cash sale! Please select Credit if this is a partial payment.');
+      return;
+    }
+
+    if (paymentMethod === 'credit' && !customerName.trim()) {
+      toast.error('Customer name is required for credit sales!');
+      return;
+    }
+
+    const isCredit = paymentMethod === 'credit' || amountPaid < total;
+    if (isCredit && !['superadmin', 'admin'].includes(user?.role || '')) {
+      toast.error('Only administrators can process partial payments or credit sales!');
+      return;
+    }
+
+    const processCheckout = async () => {
+      setIsProcessing(true);
+      try {
+        const batch = writeBatch(db);
+        const saleRef = doc(collection(db, 'sales'));
+        
+        const outstandingBalance = isCredit ? Math.max(0, total - amountPaid) : 0;
+        const excessPayment = (!isCredit && customerId && amountPaid > total) ? amountPaid - total : 0;
+
+        const saleData = {
+          cashierId: user?.uid ?? null,
+          cashierName: user?.displayName || user?.email || 'Unknown',
+          totalAmount: total,
+          taxAmount: taxAmount,
+          paymentMethod,
+          amountPaid: amountPaid || 0,
+          balance: paymentMethod === 'cash' ? Math.max(0, (amountPaid || 0) - total - excessPayment) : 0,
+          customerName: (customerName || '').trim(),
+          customerId: (customerId && customerId.trim() !== '') ? customerId : null,
+          reference: (reference || '').trim(),
+          isCredit,
+          outstandingBalance,
+          timestamp: serverTimestamp()
+        };
+
+        batch.set(saleRef, saleData);
+
+      // Handle Loyalty Points
+      if (customerId && settings?.loyaltyPointRate) {
+        const pointsEarned = Math.floor(total / settings.loyaltyPointRate);
+        if (pointsEarned > 0) {
+          const customerRef = doc(db, 'customers', customerId);
+          batch.update(customerRef, {
+            loyaltyPoints: increment(pointsEarned)
+          });
+        }
+      }
+
+      // Handle Credit Creation
+      if (isCredit) {
+        const creditRef = doc(collection(db, 'credits'));
+        const itemsSummary = cart.map(item => `${item.name} x${item.quantity}`).join(', ');
+        batch.set(creditRef, {
+          saleId: saleRef.id,
+          customerId: (customerId && customerId.trim() !== '') ? customerId : null,
+          customerName: (customerName || '').trim(),
+          totalAmount: total,
+          amountPaid: amountPaid || 0,
+          outstandingBalance: outstandingBalance,
+          items: itemsSummary,
+          timestamp: serverTimestamp(),
+          status: 'open'
+        });
+      }
+
+      // Handle Excess Payment Settle Existing Credits
+      if (excessPayment > 0 && customerId) {
+        const q = query(
+          collection(db, 'credits'),
+          where('customerId', '==', customerId),
+          where('status', '==', 'open'),
+          orderBy('timestamp', 'asc')
+        );
+        const snapshot = await getDocs(q);
+        let remainingExcess = excessPayment;
+
+        for (const creditDoc of snapshot.docs) {
+          if (remainingExcess <= 0) break;
+
+          const creditData = creditDoc.data();
+          const outstanding = creditData.outstandingBalance || 0;
+          const paymentToApply = Math.min(remainingExcess, outstanding);
+
+          if (paymentToApply > 0) {
+            // Update Credit Document
+            const newOutstanding = outstanding - paymentToApply;
+            batch.update(creditDoc.ref, {
+              amountPaid: increment(paymentToApply),
+              outstandingBalance: increment(-paymentToApply),
+              status: newOutstanding <= 0 ? 'settled' : 'open'
+            });
+
+            // Update Original Sale Document
+            const originalSaleRef = doc(db, 'sales', creditData.saleId);
+            batch.update(originalSaleRef, {
+              amountPaid: increment(paymentToApply),
+              outstandingBalance: increment(-paymentToApply)
+            });
+
+            // Record Credit Payment
+            const paymentRef = doc(collection(db, 'credit_payments'));
+            batch.set(paymentRef, {
+              creditId: creditDoc.id,
+              saleId: creditData.saleId,
+              amountPaid: paymentToApply,
+              remainingBalance: newOutstanding,
+              paymentMethod,
+              reference: `POS Excess: ${saleRef.id}`,
+              timestamp: serverTimestamp(),
+              cashierId: user?.uid ?? null,
+              cashierName: user?.displayName || user?.email || 'Unknown'
+            });
+
+            remainingExcess -= paymentToApply;
+          }
+        }
+      }
+
+      for (const item of cart) {
+        const itemRef = doc(collection(db, `sales/${saleRef.id}/items`));
+        batch.set(itemRef, {
+          saleId: saleRef.id,
+          productId: item.id,
+          productName: item.name,
+          name: item.name,
+          barcode: item.barcode,
+          quantity: item.quantity,
+          unitPrice: item.sellingPrice,
+          sellingPrice: item.sellingPrice,
+          totalPrice: item.sellingPrice * item.quantity,
+          timestamp: serverTimestamp()
+        });
+
+        const productRef = doc(db, 'products', item.id);
+        batch.update(productRef, {
+          stockQuantity: increment(-item.quantity),
+          updatedAt: new Date().toISOString()
+        });
+
+        const transRef = doc(collection(db, 'inventory_transactions'));
+        batch.set(transRef, {
+          productId: item.id,
+          type: 'stock-out',
+          quantity: item.quantity,
+          reason: `Sale ${saleRef.id}`,
+          timestamp: serverTimestamp(),
+          userId: user?.uid ?? null
+        });
+      }
+
+      await batch.commit();
+      
+      await recordAuditLog(
+        user!.uid, 
+        user!.displayName || user!.username, 
+        'POS_SALE', 
+        `Completed sale ${saleRef.id} for KES ${total.toLocaleString()}`
+      );
+      
+      const newTotalBalance = Math.max(0, customerBalance + outstandingBalance - excessPayment);
+      
+      setLastSale({ 
+        id: saleRef.id, 
+        ...saleData, 
+        timestamp: new Date(),
+        newTotalBalance 
+      } as any);
+      setLastSaleItems([...cart]);
+      setShowReceipt(true);
+      setCart([]);
+      setAmountPaid(0);
+      isManualAmountPaid.current = false;
+      setCustomerName('');
+      setCustomerId('');
+      setCustomerBalance(0);
+      setCustomerSearchQuery('');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, 'sales');
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+
+    if (cart.length > 10 || total > 5000) {
+      setConfirmConfig({
+        isOpen: true,
+        title: 'Confirm Checkout',
+        message: `Are you sure you want to complete this checkout for KES ${total.toLocaleString()}?`,
+        onConfirm: processCheckout,
+        type: 'info'
+      });
+    } else {
+      processCheckout();
+    }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-8">
+      <ConfirmDialog
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+        type={confirmConfig.type}
+      />
+      <div className="flex flex-col gap-1">
+        <p className="text-sm text-indigo-600 font-medium">Fast checkout workflow with scanner-first input and real-time totals.</p>
+        <h1 className="text-2xl font-bold text-gray-900">New Sale</h1>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        {/* Left: Sale Details */}
+        <div className="lg:col-span-2 space-y-8">
+          <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-8">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <ShoppingCart className="w-6 h-6 text-indigo-600" />
+                Current Cart
+              </h2>
+              <div className="flex items-center gap-4">
+                {cart.length > 0 && (
+                  <button 
+                    onClick={() => setConfirmConfig({
+                      isOpen: true,
+                      title: 'Clear Cart',
+                      message: 'Are you sure you want to clear the current cart?',
+                      onConfirm: () => setCart([]),
+                      type: 'danger'
+                    })}
+                    className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3 h-3" /> Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          
+          <div className="space-y-6">
+            <form onSubmit={handleScan} className="space-y-2">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium text-gray-600">Scan Barcode</label>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${isScannerFocused ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+                  <span className={`text-xs font-bold ${isScannerFocused ? 'text-green-600' : 'text-gray-400'}`}>
+                    {isScannerFocused ? 'Scanner Ready' : 'Scanner Inactive - Click to Focus'}
+                  </span>
+                </div>
+              </div>
+              <div className="relative">
+                <input 
+                  ref={inputRef}
+                  type="text"
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  placeholder="Scan or type barcode, then press Enter"
+                  className={`w-full px-4 py-4 bg-gray-50 border-2 rounded-2xl outline-none transition-all placeholder:text-gray-400 text-lg font-mono ${
+                    isScannerFocused ? 'border-indigo-500 ring-4 ring-indigo-50' : 'border-gray-200'
+                  }`}
+                />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 flex items-center gap-1">
+                <Shield className="w-3 h-3" />
+                Hardware scanners in keyboard mode will auto-submit.
+              </p>
+            </form>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-600">Quick Add (No Barcode Label)</label>
+              <div className="relative" ref={quickSearchRef}>
+                <div className="relative">
+                  <input 
+                    type="text"
+                    value={quickSearchQuery}
+                    onChange={(e) => setQuickSearchQuery(e.target.value)}
+                    placeholder="Type product name or SKU (e.g. cigarette, sweet)"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-gray-500"
+                  />
+                </div>
+
+                {quickSearchResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden">
+                    {quickSearchResults.map(product => (
+                      <button
+                        key={product.id}
+                        onClick={() => {
+                          addToCart(product);
+                          setQuickSearchQuery('');
+                          setQuickSearchResults([]);
+                        }}
+                        className="w-full px-4 py-3 text-left hover:bg-gray-50 flex justify-between items-center group transition-colors"
+                      >
+                        <div>
+                          <p className="font-bold text-gray-900 group-hover:text-indigo-600">{product.name}</p>
+                          <p className="text-xs text-gray-500">{product.sku}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-gray-900">KES {product.sellingPrice.toLocaleString()}</p>
+                          <p className={`text-[10px] font-bold uppercase ${product.stockQuantity < 10 ? 'text-red-500' : 'text-green-500'}`}>
+                            {product.stockQuantity} in stock
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">Use this for small items that are hard to label. Checkout still deducts inventory.</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-12 gap-4 pb-2 border-b border-gray-100 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+              <div className="col-span-6">ITEM</div>
+              <div className="col-span-2 text-center">QTY</div>
+              <div className="col-span-2 text-right">PRICE</div>
+              <div className="col-span-2 text-right">TOTAL</div>
+            </div>
+
+            <div className="space-y-4 min-h-50">
+              {cart.length === 0 ? (
+                <p className="text-gray-600 py-8 text-center font-medium">Cart is empty — scan a product to begin.</p>
+              ) : (
+                cart.map(item => (
+                  <div key={item.id} className="grid grid-cols-12 gap-4 items-center group bg-gray-50/50 p-2 rounded-xl border border-transparent hover:border-indigo-100 transition-all">
+                    <div className="col-span-5">
+                      <h3 className="font-bold text-gray-900 truncate">{item.name}</h3>
+                      <p className="text-[10px] text-gray-500">{item.sku}</p>
+                    </div>
+                    <div className="col-span-3 flex justify-center">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => updateQuantity(item.id, -1)} className="p-1 hover:bg-white rounded text-gray-500 shadow-sm border border-gray-100"><Minus className="w-3 h-3" /></button>
+                        <input 
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => setQuantity(item.id, e.target.value)}
+                          className="w-10 text-center text-sm font-bold bg-white border border-gray-200 rounded outline-none focus:ring-1 focus:ring-indigo-600 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:bg-white rounded text-gray-500 shadow-sm border border-gray-100"><Plus className="w-3 h-3" /></button>
+                      </div>
+                    </div>
+                    <div className="col-span-2 text-right text-sm font-bold text-gray-900">
+                      {(item.sellingPrice * item.quantity).toLocaleString()}
+                    </div>
+                    <div className="col-span-2 flex justify-end">
+                      <button 
+                        onClick={() => removeFromCart(item.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        title="Remove item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+        {/* Right: Checkout Panel */}
+        <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-8">
+          <h2 className="text-3xl font-bold text-gray-900">Checkout</h2>
+
+          <div className="space-y-2">
+            <div className="flex justify-between text-gray-600">
+              <span className="text-lg">Subtotal: KES {subtotalBeforeVAT.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-gray-600">
+              <span className="text-lg">VAT ({taxRate}%): KES {taxAmount.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-2xl font-bold text-gray-900 pt-2 border-t border-gray-100">
+              <span>Total: <span className="text-indigo-600">KES {total.toLocaleString()}</span></span>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Payment Method</label>
+              <select 
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as any)}
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700"
+              >
+                <option value="cash">Cash</option>
+                <option value="mpesa">M-Pesa</option>
+                <option value="card">Card</option>
+                {(user?.role === 'superadmin' || user?.permissions?.includes('credits')) && (
+                  <option value="credit">Credit</option>
+                )}
+              </select>
+            </div>
+
+            <div className="space-y-2 relative" ref={customerSearchRef}>
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium text-gray-700">Customer Search</label>
+                {customerId && (
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-bold px-2 py-1 rounded-lg ${customerBalance > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                      Balance: KES {customerBalance.toLocaleString()}
+                    </span>
+                    <button 
+                      onClick={() => {
+                        setCustomerId('');
+                        setCustomerName('');
+                        setCustomerSearchQuery('');
+                        setCustomerBalance(0);
+                      }}
+                      className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-red-500 transition-colors"
+                      title="Clear customer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="relative">
+                <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input 
+                  ref={customerInputRef}
+                  type="text"
+                  value={customerSearchQuery}
+                  onChange={(e) => {
+                    setCustomerSearchQuery(e.target.value);
+                    setShowCustomerDropdown(true);
+                  }}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  placeholder="Search customer by name, code or phone..."
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500 text-sm"
+                />
+              </div>
+
+              {showCustomerDropdown && customerSearchResults.length > 0 && (
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                  {customerSearchResults.map(customer => (
+                    <button
+                      key={customer.id}
+                      onClick={() => {
+                        setCustomerName(customer.name);
+                        setCustomerId(customer.id);
+                        setCustomerSearchQuery(customer.name);
+                        setShowCustomerDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left hover:bg-indigo-50 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
+                    >
+                      <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center font-bold text-xs">
+                        {customer.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-gray-900">{customer.name}</p>
+                          {customer.customerCode && (
+                            <span className="text-[10px] font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">
+                              {customer.customerCode}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-gray-500">
+                          {customer.phone || 'No phone'} {customer.address ? `• ${customer.address}` : ''}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Customer Name (Manual/Selected)</label>
+              <input 
+                type="text"
+                value={customerName}
+                onChange={(e) => {
+                  setCustomerName(e.target.value);
+                  setCustomerId('');
+                }}
+                placeholder="e.g. Jane Njeri"
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Amount Paid / Deposit</label>
+              <input 
+                type="number"
+                value={amountPaid === 0 ? '' : amountPaid}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                  setAmountPaid(val);
+                  isManualAmountPaid.current = true;
+                }}
+                onFocus={(e) => e.target.select()}
+                autoComplete="off"
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-lg"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Reference (optional)</label>
+              <input 
+                type="text"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+
+            <button 
+              onClick={handleCheckout}
+              disabled={isProcessing || cart.length === 0}
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
+            >
+              {isProcessing ? (
+                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                'Complete Checkout'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Receipt Modal */}
+      {showReceipt && lastSale && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-indigo-600 text-white flex justify-between items-center shrink-0">
+              <h3 className="font-bold">Sale Completed</h3>
+              <button onClick={() => setShowReceipt(false)} className="p-1 hover:bg-white/20 rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">KES {lastSale.totalAmount.toLocaleString()}</h2>
+                <p className="text-xs text-gray-500">Transaction ID: {lastSale.id}</p>
+              </div>
+
+              {/* Receipt Preview */}
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 font-mono text-[10px] space-y-2 max-w-75 mx-auto shadow-inner">
+                <div className="text-center border-b border-dashed border-gray-300 pb-2 mb-2">
+                  <h4 className="font-bold text-sm uppercase">KingKush Supermarket</h4>
+                  <p>1331-60100-Embu</p>
+                  <p>Tel: +254 701137747</p>
+                </div>
+                
+                <div className="flex justify-between">
+                  <span>Date: {new Date(lastSale.timestamp).toLocaleDateString()}</span>
+                  <span>Time: {new Date(lastSale.timestamp).toLocaleTimeString()}</span>
+                </div>
+                <p>Receipt: {lastSale.id.slice(-8).toUpperCase()}</p>
+                <p>Cashier: {lastSale.cashierName}</p>
+                {lastSale.customerName && <p>Customer: {lastSale.customerName}</p>}
+                
+                <div className="border-y border-dashed border-gray-300 py-2 my-2">
+                  <div className="flex justify-between font-bold mb-1">
+                    <span className="w-1/2">ITEM</span>
+                    <span className="w-1/4 text-right">QTY</span>
+                    <span className="w-1/4 text-right">TOTAL</span>
+                  </div>
+                  {lastSaleItems.map((item, idx) => (
+                    <div key={idx} className="flex justify-between">
+                      <span className="w-1/2 truncate">{item.name}</span>
+                      <span className="w-1/4 text-right">{item.quantity}</span>
+                      <span className="w-1/4 text-right">{(item.sellingPrice * item.quantity).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span>SUBTOTAL</span>
+                    <span>KES {(lastSale.totalAmount - (lastSale.taxAmount || 0)).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>VAT ({settings?.taxRate || 0}%)</span>
+                    <span>KES {(lastSale.taxAmount || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-xs border-t border-dashed border-gray-300 pt-1">
+                    <span>TOTAL</span>
+                    <span>KES {lastSale.totalAmount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>PAYMENT ({lastSale.paymentMethod.toUpperCase()})</span>
+                    <span>KES {lastSale.amountPaid.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>CHANGE</span>
+                    <span>KES {lastSale.balance.toLocaleString()}</span>
+                  </div>
+                  {settings?.loyaltyPointRate && (
+                    <div className="flex justify-between text-indigo-600 border-t border-dashed border-gray-300 pt-1 mt-1">
+                      <span>POINTS EARNED</span>
+                      <span>{Math.floor(lastSale.totalAmount / settings.loyaltyPointRate)}</span>
+                    </div>
+                  )}
+                  {(lastSale.newTotalBalance !== undefined && lastSale.newTotalBalance > 0) && (
+                    <div className="flex justify-between font-bold text-red-600 border-t border-dashed border-gray-300 pt-1 mt-1">
+                      <span>TOTAL OUTSTANDING</span>
+                      <span>KES {lastSale.newTotalBalance.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-center border-t border-dashed border-gray-300 pt-2 mt-4">
+                  <p>THANK YOU FOR SHOPPING WITH US!</p>
+                  <p>Goods once sold are not returnable.</p>
+                  <p className="mt-1 text-[8px] opacity-50">Created by Noxira labs</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 pt-4">
+                <button 
+                  onClick={() => window.print()}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all"
+                >
+                  <Printer className="w-6 h-6" />
+                  Print Receipt
+                </button>
+                <button 
+                  onClick={() => setShowReceipt(false)}
+                  className="w-full py-3 border border-gray-200 rounded-xl font-medium text-gray-600 hover:bg-gray-50 transition-all"
+                >
+                  New Sale
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden Thermal Receipt for Printing */}
+      {showReceipt && lastSale && (
+        <div id="thermal-receipt" className="hidden print:block font-mono text-[12px] leading-tight p-4 w-[80mm]">
+          <div className="text-center mb-4">
+            <h1 className="font-bold text-lg uppercase">KingKush Supermarket</h1>
+            <p>1331-60100-Embu</p>
+            <p>Tel: +254 701137747</p>
+            <p className="mt-2">********************************</p>
+          </div>
+          
+          <div className="mb-2">
+            <div className="flex justify-between">
+              <span>DATE: {new Date(lastSale.timestamp).toLocaleDateString()}</span>
+              <span>TIME: {new Date(lastSale.timestamp).toLocaleTimeString()}</span>
+            </div>
+            <p>RECEIPT #: {lastSale.id.toUpperCase()}</p>
+            <p>CASHIER: {lastSale.cashierName.toUpperCase()}</p>
+            {lastSale.customerName && <p>CUSTOMER: {lastSale.customerName.toUpperCase()}</p>}
+            <p>********************************</p>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex justify-between font-bold mb-1">
+              <span className="w-[45%]">ITEM</span>
+              <span className="w-[15%] text-right">QTY</span>
+              <span className="w-[20%] text-right">PRICE</span>
+              <span className="w-[20%] text-right">TOTAL</span>
+            </div>
+            {lastSaleItems.map((item, idx) => (
+              <div key={idx} className="flex justify-between mb-1">
+                <span className="w-[45%] wrap-break-word">{item.name.toUpperCase()}</span>
+                <span className="w-[15%] text-right">{item.quantity}</span>
+                <span className="w-[20%] text-right">{item.sellingPrice.toLocaleString()}</span>
+                <span className="w-[20%] text-right">{(item.sellingPrice * item.quantity).toLocaleString()}</span>
+              </div>
+            ))}
+            <p>********************************</p>
+          </div>
+
+          <div className="space-y-1 mb-6">
+            <div className="flex justify-between">
+              <span>SUBTOTAL</span>
+              <span>KES {(lastSale.totalAmount - (lastSale.taxAmount || 0)).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>VAT ({settings?.taxRate || 0}%)</span>
+              <span>KES {(lastSale.taxAmount || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between font-bold text-base border-t border-dashed border-gray-300 pt-1 mt-1">
+              <span>TOTAL AMOUNT</span>
+              <span>KES {lastSale.totalAmount.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>PAYMENT ({lastSale.paymentMethod.toUpperCase()})</span>
+              <span>KES {lastSale.amountPaid.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>CHANGE</span>
+              <span>KES {lastSale.balance.toLocaleString()}</span>
+            </div>
+            {(lastSale.newTotalBalance !== undefined && lastSale.newTotalBalance > 0) && (
+              <div className="flex justify-between font-bold border-t border-dashed border-gray-300 pt-1 mt-1">
+                <span>TOTAL OUTSTANDING</span>
+                <span>KES {lastSale.newTotalBalance.toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="text-center">
+            <p>THANK YOU FOR SHOPPING WITH US!</p>
+            <p>GOODS ONCE SOLD ARE NOT RETURNABLE</p>
+            <p className="mt-4">Created by Noxira labs</p>
+            <p className="mt-2">********************************</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
