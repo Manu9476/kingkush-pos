@@ -342,7 +342,7 @@ export default function POS() {
   const subtotal = cart.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0);
   const taxRate = settings?.taxRate || 0;
   const total = subtotal;
-  const taxAmount = total - (total / (1 + taxRate / 100));
+  const taxAmount = (total * taxRate) / 100;
   const subtotalBeforeVAT = total - taxAmount;
 
   useEffect(() => {
@@ -985,6 +985,7 @@ export default function POS() {
                 </div>
 
                 <div className="text-center border-t border-dashed border-gray-300 pt-2 mt-4">
+                  <p className="font-bold text-xs mb-1">ALL AMOUNTS ARE INCLUSIVE OF VAT</p>
                   <p>THANK YOU FOR SHOPPING WITH US!</p>
                   <p>Goods once sold are not returnable.</p>
                   <p className="mt-1 text-[8px] opacity-50">Created by Noxira labs</p>
@@ -1080,6 +1081,7 @@ export default function POS() {
           </div>
 
           <div className="text-center">
+            <p className="font-bold mb-1">ALL AMOUNTS ARE INCLUSIVE OF VAT</p>
             <p>THANK YOU FOR SHOPPING WITH US!</p>
             <p>GOODS ONCE SOLD ARE NOT RETURNABLE</p>
             <p className="mt-4">Created by Noxira labs</p>

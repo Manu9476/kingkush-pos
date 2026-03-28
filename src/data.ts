@@ -335,9 +335,12 @@ function isValidLocalStore(value: unknown): value is LocalStore {
 
 async function fetchRemoteStore(silent = false): Promise<LocalStore | null> {
   try {
-    const response = await fetch(REMOTE_STORE_ENDPOINT, {
+    const response = await fetch(`${REMOTE_STORE_ENDPOINT}?_t=${Date.now()}`, {
       method: 'GET',
-      headers: { Accept: 'application/json' }
+      headers: { 
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     });
     if (!response.ok) {
       if (response.status === 404 || response.status === 405) {
