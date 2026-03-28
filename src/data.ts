@@ -333,7 +333,7 @@ function isValidLocalStore(value: unknown): value is LocalStore {
   return true;
 }
 
-async function fetchRemoteStore(): Promise<LocalStore | null> {
+async function fetchRemoteStore(silent = false): Promise<LocalStore | null> {
   try {
     const response = await fetch(REMOTE_STORE_ENDPOINT, {
       method: 'GET',
@@ -350,11 +350,11 @@ async function fetchRemoteStore(): Promise<LocalStore | null> {
     if (!payload || !isValidLocalStore(payload.store)) {
       return null;
     }
-    console.log('✅ Successfully connected to Cloud Database.');
+    if (!silent) console.log('✅ Successfully connected to Cloud Database.');
     remoteStatus = 'enabled';
     return payload.store;
   } catch (error) {
-    console.error('❌ Cloud Database Fetch Error:', error);
+    if (!silent) console.error('❌ Cloud Database Fetch Error:', error);
     if (remoteStatus === 'unknown') {
       remoteStatus = 'disabled';
     }
@@ -400,6 +400,25 @@ function scheduleRemoteStoreSync() {
   }, REMOTE_SYNC_DEBOUNCE_MS);
 }
 
+function startPolling() {
+  setInterval(async () => {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (remoteStatus === 'disabled' || remoteSyncInFlight || remoteSyncTimer !== null) return;
+    
+    const remoteStore = await fetchRemoteStore(true);
+    if (remoteStore) {
+      const remoteString = JSON.stringify(remoteStore);
+      const localString = JSON.stringify(store);
+      
+      if (remoteString !== localString) {
+        store = remoteStore;
+        localStorage.setItem(STORE_KEY, remoteString);
+        emitChanges();
+      }
+    }
+  }, 5000);
+}
+
 async function initializeStore() {
   const remoteStore = await fetchRemoteStore();
   if (remoteStore) {
@@ -411,6 +430,7 @@ async function initializeStore() {
   hydrateAuthFromStorage();
   emitChanges();
   notifyAuth();
+  startPolling();
 }
 
 function ensureStoreInit() {
