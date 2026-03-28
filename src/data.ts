@@ -186,8 +186,33 @@ function encodeValue(value: unknown): JsonValue {
   return String(value);
 }
 
-function decodeValue(value: JsonValue): unknown {
-  if (Array.isArray(value)) return value.map((item) => decodeValue(item));
+function isDateLikeFieldName(fieldName: string | null) {
+  if (!fieldName) return false;
+  return /(^date$|timestamp|At$)/i.test(fieldName);
+}
+
+function tryParseDateLikeValue(raw: unknown) {
+  if (typeof raw === 'string') {
+    const millis = Date.parse(raw);
+    if (!Number.isNaN(millis)) {
+      return Timestamp.fromDate(new Date(millis));
+    }
+  }
+
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (raw > 0 && raw < 9999999999999) {
+      return Timestamp.fromMillis(raw);
+    }
+  }
+
+  return null;
+}
+
+function decodeValue(value: JsonValue, fieldName: string | null = null): unknown {
+  const parsedDate = isDateLikeFieldName(fieldName) ? tryParseDateLikeValue(value) : null;
+  if (parsedDate) return parsedDate;
+
+  if (Array.isArray(value)) return value.map((item) => decodeValue(item, fieldName));
   if (value && typeof value === 'object') {
     const objectValue = value as JsonObject;
     if (typeof objectValue.__kk_timestamp === 'string') {
@@ -195,7 +220,7 @@ function decodeValue(value: JsonValue): unknown {
     }
     const out: Record<string, unknown> = {};
     for (const [key, nested] of Object.entries(objectValue)) {
-      out[key] = decodeValue(nested as JsonValue);
+      out[key] = decodeValue(nested as JsonValue, key);
     }
     return out;
   }
