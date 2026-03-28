@@ -44,8 +44,24 @@ Open:
 - Default bootstrap user:
   - Username: `admin`
   - Password: `admin123`
-- App data is persisted in browser `localStorage` through the adapter layer.
+- App data is mirrored to a remote API store at `/api/store` when available.
+- Local `localStorage` is still used as a fallback cache for offline/dev safety.
 - Existing screens still use collection/doc/query semantics through the adapter API, so replacing with real HTTP services later is straightforward.
+
+## Durable Cloud Data (No Browser-Only Loss)
+
+This project now includes a Vercel serverless API at `api/store.ts` backed by Neon Postgres.
+
+To enable durable shared data in production:
+
+1. In Vercel, open your project and add **Storage -> Neon** (or any Postgres integration).
+2. Ensure one of these env vars is set: `POSTGRES_URL` or `DATABASE_URL`.
+3. Redeploy the project.
+
+After this, app writes are persisted in Postgres and are no longer limited to one browser's local storage.
+
+Important reliability note:
+- No system can guarantee literal "never lost" without backups. Use managed Postgres backups/point-in-time restore in Vercel for disaster recovery.
 
 ## Deployment Paths
 

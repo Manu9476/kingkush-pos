@@ -92,6 +92,10 @@ type AuthListener = (user: AuthLikeUser | null) => void;
 
 const STORE_KEY = 'kingkush-pos.store.v1';
 const AUTH_KEY = 'kingkush-pos.auth.uid.v1';
+const REMOTE_STORE_ENDPOINT = '/api/store';
+const REMOTE_SYNC_DEBOUNCE_MS = 500;
+
+type RemoteStatus = 'unknown' | 'enabled' | 'disabled';
 
 const DEFAULT_PERMISSIONS = [
   'dashboard',
@@ -115,6 +119,10 @@ const DEFAULT_PERMISSIONS = [
 
 const listeners = new Set<Listener>();
 const authListeners = new Set<AuthListener>();
+let remoteStatus: RemoteStatus = 'unknown';
+let remoteInitPromise: Promise<void> | null = null;
+let remoteSyncTimer: number | null = null;
+let remoteSyncInFlight = false;
 
 function randomId() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -245,6 +253,102 @@ let store = readStore();
 
 function writeStore() {
   localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  scheduleRemoteStoreSync();
+}
+
+function isValidLocalStore(value: unknown): value is LocalStore {
+  if (!isPlainObject(value)) return false;
+  if (!isPlainObject((value as { docs?: unknown }).docs)) return false;
+  if (!isPlainObject((value as { authAccounts?: unknown }).authAccounts)) return false;
+  return true;
+}
+
+async function fetchRemoteStore(): Promise<LocalStore | null> {
+  try {
+    const response = await fetch(REMOTE_STORE_ENDPOINT, {
+      method: 'GET',
+      headers: { Accept: 'application/json' }
+    });
+    if (!response.ok) {
+      if (response.status === 404 || response.status === 405) {
+        remoteStatus = 'disabled';
+        return null;
+      }
+      throw new Error(`Remote store fetch failed with status ${response.status}`);
+    }
+    const payload = await response.json() as { store?: unknown };
+    if (!payload || !isValidLocalStore(payload.store)) {
+      return null;
+    }
+    remoteStatus = 'enabled';
+    return payload.store;
+  } catch {
+    if (remoteStatus === 'unknown') {
+      remoteStatus = 'disabled';
+    }
+    return null;
+  }
+}
+
+async function pushRemoteStore(snapshot: LocalStore) {
+  if (remoteStatus === 'disabled') return;
+  remoteSyncInFlight = true;
+  try {
+    const response = await fetch(REMOTE_STORE_ENDPOINT, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ store: snapshot })
+    });
+    if (!response.ok) {
+      throw new Error(`Remote store write failed with status ${response.status}`);
+    }
+    remoteStatus = 'enabled';
+  } catch {
+    if (remoteStatus === 'unknown') {
+      remoteStatus = 'disabled';
+    }
+  } finally {
+    remoteSyncInFlight = false;
+  }
+}
+
+function scheduleRemoteStoreSync() {
+  if (remoteStatus === 'disabled') return;
+  if (remoteSyncTimer !== null) {
+    window.clearTimeout(remoteSyncTimer);
+  }
+  remoteSyncTimer = window.setTimeout(() => {
+    remoteSyncTimer = null;
+    if (remoteSyncInFlight) {
+      scheduleRemoteStoreSync();
+      return;
+    }
+    void pushRemoteStore(deepClone(store));
+  }, REMOTE_SYNC_DEBOUNCE_MS);
+}
+
+async function initializeStore() {
+  const remoteStore = await fetchRemoteStore();
+  if (remoteStore) {
+    store = remoteStore;
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  }
+
+  ensureSeedData();
+  hydrateAuthFromStorage();
+  emitChanges();
+  notifyAuth();
+}
+
+function ensureStoreInit() {
+  if (!remoteInitPromise) {
+    remoteInitPromise = initializeStore();
+  }
+  return remoteInitPromise;
+}
+
+async function ensureStoreReady() {
+  await ensureStoreInit();
 }
 
 function createCollectionRef(path: string): CollectionRef {
@@ -593,8 +697,8 @@ export class Timestamp {
   }
 }
 
-ensureSeedData();
 hydrateAuthFromStorage();
+void ensureStoreInit();
 
 export function collection(base: DBRef | DocumentRef, path: string) {
   if (base.kind === 'db') {
@@ -641,6 +745,7 @@ export function query(source: CollectionRef | CollectionGroupRef, ...constraints
 }
 
 export async function getDoc(ref: DocumentRef): Promise<DocumentSnapshot> {
+  await ensureStoreReady();
   const raw = store.docs[ref.path];
   if (!raw) {
     return {
@@ -661,10 +766,12 @@ export async function getDoc(ref: DocumentRef): Promise<DocumentSnapshot> {
 }
 
 export async function getDocFromServer(ref: DocumentRef) {
+  await ensureStoreReady();
   return getDoc(ref);
 }
 
 export async function getDocs(source: CollectionRef | QueryRef): Promise<QuerySnapshot> {
+  await ensureStoreReady();
   if (source.kind === 'collection') {
     return makeQuerySnapshot(listCollectionDocs(source.path));
   }
@@ -672,6 +779,7 @@ export async function getDocs(source: CollectionRef | QueryRef): Promise<QuerySn
 }
 
 export async function setDoc(ref: DocumentRef, data: any) {
+  await ensureStoreReady();
   maybeDenyWrite(ref.path);
   const normalized = applyFieldOps({}, data);
   store.docs[ref.path] = encodeValue(normalized);
@@ -681,12 +789,14 @@ export async function setDoc(ref: DocumentRef, data: any) {
 }
 
 export async function addDoc(ref: CollectionRef, data: any) {
+  await ensureStoreReady();
   const created = doc(ref);
   await setDoc(created, data);
   return created;
 }
 
 export async function updateDoc(ref: DocumentRef, data: any) {
+  await ensureStoreReady();
   maybeDenyWrite(ref.path);
   const existing = store.docs[ref.path];
   if (!existing) {
@@ -701,6 +811,7 @@ export async function updateDoc(ref: DocumentRef, data: any) {
 }
 
 export async function deleteDoc(ref: DocumentRef) {
+  await ensureStoreReady();
   maybeDenyWrite(ref.path);
   delete store.docs[ref.path];
   writeStore();
@@ -751,6 +862,19 @@ export function onSnapshot(
   } catch (error) {
     onError?.(error);
   }
+
+  void ensureStoreReady().then(() => {
+    try {
+      if (source.kind === 'collection') {
+        onNext(makeQuerySnapshot(listCollectionDocs(source.path)));
+      } else {
+        onNext(makeQuerySnapshot(applyQuery(source)));
+      }
+    } catch (error) {
+      onError?.(error);
+    }
+  });
+
   return () => {
     listeners.delete(listener);
   };
@@ -765,6 +889,7 @@ export function onAuthStateChanged(_authObj: typeof auth, callback: AuthListener
 }
 
 export async function signInWithEmailAndPassword(_authObj: typeof auth, email: string, password: string) {
+  await ensureStoreReady();
   const normalizedEmail = email.toLowerCase();
   const account = store.authAccounts[normalizedEmail];
   if (!account) {
@@ -779,6 +904,7 @@ export async function signInWithEmailAndPassword(_authObj: typeof auth, email: s
 }
 
 export async function createUserWithEmailAndPassword(_authObj: typeof auth, email: string, password: string) {
+  await ensureStoreReady();
   const normalizedEmail = email.toLowerCase();
   if (store.authAccounts[normalizedEmail]) {
     throw firestoreError('auth/email-already-in-use', 'Email already in use');
@@ -797,6 +923,7 @@ export async function createUserWithEmailAndPassword(_authObj: typeof auth, emai
 }
 
 export async function createLocalUserAccount(email: string, password: string) {
+  await ensureStoreReady();
   const normalizedEmail = email.toLowerCase();
   if (store.authAccounts[normalizedEmail]) {
     throw firestoreError('auth/email-already-in-use', 'Email already in use');
@@ -812,6 +939,7 @@ export async function createLocalUserAccount(email: string, password: string) {
 }
 
 export async function updateUserAccountPassword(email: string, password: string) {
+  await ensureStoreReady();
   const normalizedEmail = email.toLowerCase();
   const account = store.authAccounts[normalizedEmail];
   if (!account) {
@@ -825,6 +953,7 @@ export async function updateUserAccountPassword(email: string, password: string)
 }
 
 export async function signInWithPopup(_authObj: typeof auth, _provider: unknown) {
+  await ensureStoreReady();
   const email = 'admin@pos.com';
   if (!store.authAccounts[email]) {
     store.authAccounts[email] = {
@@ -840,6 +969,7 @@ export async function signInWithPopup(_authObj: typeof auth, _provider: unknown)
 }
 
 export async function signOut(_authObj: typeof auth) {
+  await ensureStoreReady();
   setCurrentUser(null);
 }
 
@@ -848,6 +978,7 @@ export async function sendPasswordResetEmail(_authObj: typeof auth, _email: stri
 }
 
 export async function signInAnonymously(_authObj: typeof auth) {
+  await ensureStoreReady();
   const user: AuthLikeUser = {
     uid: randomId(),
     email: `anonymous-${Date.now()}@local.pos`,
@@ -868,6 +999,7 @@ export const EmailAuthProvider = {
 };
 
 export async function reauthenticateWithCredential(user: AuthLikeUser, credential: { email: string; password: string }) {
+  await ensureStoreReady();
   const account = store.authAccounts[credential.email];
   if (!account || account.uid !== user.uid || account.password !== credential.password) {
     throw firestoreError('auth/wrong-password', 'Incorrect current password');
@@ -876,6 +1008,7 @@ export async function reauthenticateWithCredential(user: AuthLikeUser, credentia
 }
 
 export async function updatePassword(user: AuthLikeUser, newPassword: string) {
+  await ensureStoreReady();
   const account = store.authAccounts[user.email.toLowerCase()];
   if (!account || account.uid !== user.uid) {
     throw firestoreError('auth/user-not-found', 'User account not found');
