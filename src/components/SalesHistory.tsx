@@ -428,7 +428,7 @@ export default function SalesHistory() {
               <div className="border-t border-gray-100 pt-6 space-y-2">
                 <div className="flex justify-between text-gray-500">
                   <span className="text-sm font-medium">Subtotal</span>
-                  <span className="text-sm font-bold">KES {(selectedSale.totalAmount - (selectedSale.taxAmount || 0)).toLocaleString()}</span>
+                  <span className="text-sm font-bold">KES {selectedSale.totalAmount.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-gray-500">
                   <span className="text-sm font-medium">VAT</span>

@@ -343,7 +343,6 @@ export default function POS() {
   const taxRate = settings?.taxRate || 0;
   const total = subtotal;
   const taxAmount = (total * taxRate) / 100;
-  const subtotalBeforeVAT = total - taxAmount;
 
   useEffect(() => {
     // Reset manual flag when cart is cleared
@@ -742,7 +741,7 @@ export default function POS() {
 
           <div className="space-y-2">
             <div className="flex justify-between text-gray-600">
-              <span className="text-lg">Subtotal: KES {subtotalBeforeVAT.toLocaleString()}</span>
+              <span className="text-lg">Subtotal: KES {subtotal.toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-gray-600">
               <span className="text-lg">VAT ({taxRate}%): KES {taxAmount.toLocaleString()}</span>
@@ -952,7 +951,7 @@ export default function POS() {
                 <div className="space-y-1">
                   <div className="flex justify-between">
                     <span>SUBTOTAL</span>
-                    <span>KES {(lastSale.totalAmount - (lastSale.taxAmount || 0)).toLocaleString()}</span>
+                    <span>KES {lastSale.totalAmount.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>VAT ({settings?.taxRate || 0}%)</span>
@@ -1054,7 +1053,7 @@ export default function POS() {
           <div className="space-y-1 mb-6">
             <div className="flex justify-between">
               <span>SUBTOTAL</span>
-              <span>KES {(lastSale.totalAmount - (lastSale.taxAmount || 0)).toLocaleString()}</span>
+              <span>KES {lastSale.totalAmount.toLocaleString()}</span>
             </div>
             <div className="flex justify-between">
               <span>VAT ({settings?.taxRate || 0}%)</span>
