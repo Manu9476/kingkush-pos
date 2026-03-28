@@ -21,8 +21,23 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modify; file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
+    },
+    build: {
+      // The project includes charting and UI libraries, so keep a practical threshold
+      // and split heavy dependencies into dedicated chunks for better caching.
+      chunkSizeWarningLimit: 1200,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('recharts')) return 'charts';
+            }
+            return undefined;
+          },
+        },
+      },
     },
   };
 });
