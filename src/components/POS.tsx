@@ -341,9 +341,9 @@ export default function POS() {
 
   const subtotal = cart.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0);
   const taxRate = settings?.taxRate || 0;
-  const taxAmount = (subtotal * taxRate) / 100;
-  const total = subtotal + taxAmount;
-  const subtotalBeforeVAT = subtotal;
+  const total = subtotal;
+  const taxAmount = total - (total / (1 + taxRate / 100));
+  const subtotalBeforeVAT = total - taxAmount;
 
   useEffect(() => {
     // Reset manual flag when cart is cleared
