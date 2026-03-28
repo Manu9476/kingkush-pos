@@ -12,6 +12,7 @@ export default function ReadinessPanel() {
   const [statuses, setStatuses] = useState<HealthStatus[]>([
     { service: 'Auth Service', status: 'loading', message: 'Checking...' },
     { service: 'Data Layer Connection', status: 'loading', message: 'Checking...' },
+    { service: 'Cloud Database (Neon)', status: 'loading', message: 'Checking...' },
     { service: 'Security Rules', status: 'loading', message: 'Checking...' },
     { service: 'User Profile', status: 'loading', message: 'Checking...' },
   ]);
@@ -45,6 +46,20 @@ export default function ReadinessPanel() {
       } else {
         firestoreStatus = { service: 'Data Layer Connection', status: 'error', message: err.message || 'Connection failed' };
       }
+    }
+
+    // 2.5 Check Cloud Database
+    let cloudStatus: HealthStatus = { service: 'Cloud Database (Neon)', status: 'loading', message: 'Pinging /api/store...' };
+    try {
+      const res = await fetch('/api/store', { method: 'GET', headers: { Accept: 'application/json' } });
+      if (res.ok) {
+        cloudStatus = { service: 'Cloud Database (Neon)', status: 'ok', message: 'Connected and syncing successfully' };
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        cloudStatus = { service: 'Cloud Database (Neon)', status: 'error', message: errData.error || `HTTP Error ${res.status}: Check Vercel Logs` };
+      }
+    } catch (err: any) {
+      cloudStatus = { service: 'Cloud Database (Neon)', status: 'error', message: err.message || 'Network fetch failed' };
     }
 
     // 3. Check Security Rules (Write test)
@@ -81,7 +96,7 @@ export default function ReadinessPanel() {
       profileStatus = { service: 'User Profile', status: 'ok', message: 'Login required for profile check' };
     }
 
-    setStatuses([authStatus, firestoreStatus, rulesStatus, profileStatus]);
+    setStatuses([authStatus, firestoreStatus, cloudStatus, rulesStatus, profileStatus]);
   };
 
   useEffect(() => {
