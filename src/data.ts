@@ -162,10 +162,23 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function deepClone<T>(value: T): T {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(value);
+  if (value === null || typeof value !== 'object') {
+    return value;
   }
-  return JSON.parse(JSON.stringify(value));
+  if (typeof (value as any).toDate === 'function' && typeof (value as any).toMillis === 'function') {
+    return value;
+  }
+  if (value instanceof Date) {
+    return new Date(value.getTime()) as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => deepClone(item)) as unknown as T;
+  }
+  const result: any = {};
+  for (const [k, v] of Object.entries(value)) {
+    result[k] = deepClone(v);
+  }
+  return result as T;
 }
 
 function encodeValue(value: unknown): JsonValue {
