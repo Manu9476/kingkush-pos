@@ -1,8 +1,8 @@
 import type { PoolClient } from '@neondatabase/serverless';
 
-import { getSessionUser, hasPermission } from '../backend/lib/auth';
-import { readJsonBody } from '../backend/lib/http';
-import { createId, queryOne, queryRows, queryResult, withTransaction } from '../backend/lib/db';
+import { getSessionUser, hasPermission } from '../backend/lib/auth.js';
+import { readJsonBody } from '../backend/lib/http.js';
+import { createId, queryOne, queryRows, queryResult, withTransaction } from '../backend/lib/db.js';
 
 type QueryConstraint =
   | { type: 'where'; field: string; op: '=='; value: unknown }

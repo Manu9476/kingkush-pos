@@ -1,6 +1,6 @@
-import { readJsonBody } from '../_lib/http';
-import { createId, withTransaction } from '../_lib/db';
-import { createSessionToken, getSessionExpiryDate, hashPassword, hashSessionToken, serializeSessionCookie } from '../_lib/security';
+import { readJsonBody } from '../../lib/http.js';
+import { createId, withTransaction } from '../../lib/db.js';
+import { createSessionToken, getSessionExpiryDate, hashPassword, hashSessionToken, serializeSessionCookie } from '../../lib/security.js';
 
 const DEFAULT_PERMISSIONS = [
   'dashboard',

@@ -1,7 +1,7 @@
-import { readJsonBody } from '../_lib/http';
-import { createId, withTransaction } from '../_lib/db';
-import { createSessionToken, getSessionExpiryDate, hashSessionToken, serializeSessionCookie, verifyPassword } from '../_lib/security';
-import { serializeUser } from '../_lib/auth';
+import { readJsonBody } from '../../lib/http.js';
+import { createId, withTransaction } from '../../lib/db.js';
+import { createSessionToken, getSessionExpiryDate, hashSessionToken, serializeSessionCookie, verifyPassword } from '../../lib/security.js';
+import { serializeUser } from '../../lib/auth.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

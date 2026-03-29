@@ -1,7 +1,7 @@
-import { requirePermission } from '../../backend/lib/auth';
-import { readJsonBody } from '../../backend/lib/http';
-import { createId, withTransaction } from '../../backend/lib/db';
-import { hashPassword } from '../../backend/lib/security';
+import { requirePermission } from '../../backend/lib/auth.js';
+import { readJsonBody } from '../../backend/lib/http.js';
+import { createId, withTransaction } from '../../backend/lib/db.js';
+import { hashPassword } from '../../backend/lib/security.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

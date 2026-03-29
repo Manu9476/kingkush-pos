@@ -1,4 +1,4 @@
-import { queryOne } from '../_lib/db';
+import { queryOne } from '../../lib/db.js';
 
 export default async function handler(_req: any, res: any) {
   try {

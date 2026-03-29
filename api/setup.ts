@@ -1,6 +1,6 @@
-import { dispatchRouteAction } from '../../backend/lib/dispatch';
-import bootstrapHandler from '../../backend/handlers/setup/bootstrap';
-import statusHandler from '../../backend/handlers/setup/status';
+import { dispatchRouteAction } from '../backend/lib/dispatch.js';
+import bootstrapHandler from '../backend/handlers/setup/bootstrap.js';
+import statusHandler from '../backend/handlers/setup/status.js';
 
 const handlers = {
   bootstrap: bootstrapHandler,

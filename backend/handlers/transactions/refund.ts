@@ -1,8 +1,8 @@
-import { requirePermission } from '../_lib/auth';
-import { insertAuditLog } from '../_lib/audit';
-import { createId, withTransaction } from '../_lib/db';
-import { readJsonBody } from '../_lib/http';
-import { getOpenShift, insertCashMovement, resolveBranchId } from '../_lib/operations';
+import { requirePermission } from '../../lib/auth.js';
+import { insertAuditLog } from '../../lib/audit.js';
+import { createId, withTransaction } from '../../lib/db.js';
+import { readJsonBody } from '../../lib/http.js';
+import { getOpenShift, insertCashMovement, resolveBranchId } from '../../lib/operations.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

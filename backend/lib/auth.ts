@@ -1,7 +1,7 @@
 import type { PoolClient } from '@neondatabase/serverless';
 
-import { queryOne, queryResult } from './db';
-import { parseCookies, SESSION_COOKIE_NAME, hashSessionToken, serializeClearedSessionCookie } from './security';
+import { queryOne, queryResult } from './db.js';
+import { parseCookies, SESSION_COOKIE_NAME, hashSessionToken, serializeClearedSessionCookie } from './security.js';
 
 export type SessionUser = {
   uid: string;

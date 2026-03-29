@@ -1,7 +1,7 @@
 import type { PoolClient } from '@neondatabase/serverless';
 
-import type { SessionUser } from './auth';
-import { createId } from './db';
+import type { SessionUser } from './auth.js';
+import { createId } from './db.js';
 
 export async function insertAuditLog(
   client: PoolClient,

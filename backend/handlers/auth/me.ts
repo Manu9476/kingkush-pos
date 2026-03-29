@@ -1,4 +1,4 @@
-import { getSessionUser } from '../_lib/auth';
+import { getSessionUser } from '../../lib/auth.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {

@@ -1,5 +1,5 @@
-import { queryResult } from '../_lib/db';
-import { parseCookies, SESSION_COOKIE_NAME, hashSessionToken, serializeClearedSessionCookie } from '../_lib/security';
+import { queryResult } from '../../lib/db.js';
+import { parseCookies, SESSION_COOKIE_NAME, hashSessionToken, serializeClearedSessionCookie } from '../../lib/security.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

@@ -34,6 +34,13 @@ function resolveApiHandlerFile(urlPath: string) {
   }
 
   if (segments.length >= 2) {
+    const groupedTarget = resolveCandidate(path.resolve(apiRoot, `${segments[0]}.ts`));
+    if (groupedTarget) {
+      return groupedTarget;
+    }
+  }
+
+  if (segments.length >= 2) {
     return resolveCandidate(path.resolve(apiRoot, ...segments.slice(0, -1), '[action].ts'));
   }
 

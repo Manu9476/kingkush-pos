@@ -3,7 +3,7 @@ import type { PoolClient, QueryResult } from '@neondatabase/serverless';
 import { randomUUID } from 'node:crypto';
 import ws from 'ws';
 
-import { hashPassword } from './security';
+import { hashPassword } from './security.js';
 
 neonConfig.webSocketConstructor = ws;
 
