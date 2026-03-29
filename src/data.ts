@@ -27,8 +27,6 @@ type AuthLikeUser = {
 
 type DocumentData = any;
 
-type RefKind = 'db' | 'collection' | 'document' | 'query' | 'collectionGroup';
-
 type DBRef = {
   kind: 'db';
 };
@@ -174,7 +172,7 @@ function deepClone<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((item) => deepClone(item)) as unknown as T;
   }
-  const result: any = {};
+  const result: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value)) {
     result[k] = deepClone(v);
   }
@@ -353,11 +351,13 @@ async function fetchRemoteStore(silent = false): Promise<LocalStore | null> {
     if (!payload || !isValidLocalStore(payload.store)) {
       return null;
     }
-    if (!silent) console.log('✅ Successfully connected to Cloud Database.');
+    // Cloud DB connection successful
     remoteStatus = 'enabled';
     return payload.store;
   } catch (error) {
-    if (!silent) console.error('❌ Cloud Database Fetch Error:', error);
+    if (!silent && process.env.NODE_ENV === 'development') {
+      console.error('❌ Cloud Database Fetch Error:', error);
+    }
     if (remoteStatus === 'unknown') {
       remoteStatus = 'disabled';
     }
@@ -379,7 +379,9 @@ async function pushRemoteStore(snapshot: LocalStore) {
     }
     remoteStatus = 'enabled';
   } catch (error) {
-    console.error('❌ Cloud Database Write Error:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Cloud Database Write Error:', error);
+    }
     if (remoteStatus === 'unknown') {
       remoteStatus = 'disabled';
     }
@@ -740,7 +742,9 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Data Layer Error:', JSON.stringify(errInfo));
+  if (process.env.NODE_ENV === 'development') {
+    console.error('Data Layer Error:', JSON.stringify(errInfo));
+  }
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -974,6 +978,32 @@ export function onSnapshot(
   return () => {
     listeners.delete(listener);
   };
+}
+
+/**
+ * Safely convert any timestamp-like value to a Date object.
+ * Handles Timestamp objects, Date objects, ISO strings, and seconds/nanoseconds objects.
+ */
+export function toDate(value: unknown): Date {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') return new Date(value);
+  if (typeof value === 'number') return new Date(value);
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.toDate === 'function') {
+      try {
+        const result = obj.toDate();
+        if (result instanceof Date) return result;
+      } catch {
+        // Fall through
+      }
+    }
+    if (typeof obj.seconds === 'number') {
+      const millis = obj.seconds * 1000 + (typeof obj.nanoseconds === 'number' ? Math.floor(obj.nanoseconds / 1_000_000) : 0);
+      return new Date(millis);
+    }
+  }
+  return new Date(0);
 }
 
 export function onAuthStateChanged(_authObj: typeof auth, callback: AuthListener) {

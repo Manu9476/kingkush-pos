@@ -12,7 +12,7 @@ import {
 } from '../data';
 import { Category } from '../types';
 import { useAuth } from '../App';
-import { Plus, Edit2, Trash2, Folder, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Folder } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 

@@ -18,9 +18,8 @@ export default function Login() {
     setError(null);
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      console.error('Login failed:', error);
-      setError(error.message || 'Google login failed');
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'Google login failed');
     } finally {
       setLoading(false);
     }
@@ -32,9 +31,8 @@ export default function Login() {
     setError(null);
     try {
       await login(username, password);
-    } catch (error: any) {
-      console.error('Auth failed:', error);
-      setError(error.message || 'Authentication failed');
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'Authentication failed');
     } finally {
       setLoading(false);
     }

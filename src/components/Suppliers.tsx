@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   db, 
   collection, 
@@ -15,7 +15,7 @@ import {
 } from '../data';
 import { Supplier } from '../types';
 import { useAuth } from '../App';
-import { Plus, Edit2, Trash2, Truck, Phone, Mail, User, History, X, Search, Package, CheckCircle, Clock, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Truck, Phone, Mail, User, History, X, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   db, 
   collection, 
@@ -8,7 +8,8 @@ import {
   limit,
   handleFirestoreError,
   OperationType,
-  getDocs
+  getDocs,
+  toDate
 } from '../data';
 import { Sale, Product, Credit, SaleItem, Expense, CreditPayment } from '../types';
 import { 
@@ -18,17 +19,12 @@ import {
   Package, 
   ShoppingCart, 
   AlertCircle,
-  ArrowUpRight,
-  ArrowDownRight,
   Users,
   Shield,
   Search,
   Printer,
-  ChevronRight,
-  CreditCard,
   DollarSign,
   Eye,
-  CheckCircle,
   Receipt,
   X
 } from 'lucide-react';
@@ -47,7 +43,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 interface DashboardReceipt {
   id: string;
-  timestamp: any;
+  timestamp: { toDate: () => Date } | Date | string | { seconds: number; nanoseconds: number } | null;
   customerName: string;
   cashierName: string;
   paymentMethod: string;
@@ -78,68 +74,58 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user) return;
 
-    let unsubSales = () => {};
-    let unsubProducts = () => {};
-    let unsubRecent = () => {};
-    let unsubCredits = () => {};
-    let unsubExpenses = () => {};
-    let unsubPayments = () => {};
+    const unsubscribers: (() => void)[] = [];
 
     if ((user.role as string) === 'superadmin' || user.permissions.includes('dashboard')) {
-      unsubSales = onSnapshot(collection(db, 'sales'), 
+      unsubscribers.push(onSnapshot(collection(db, 'sales'), 
         (snapshot) => setSales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale))),
         (err) => handleFirestoreError(err, OperationType.LIST, 'sales')
-      );
-      unsubRecent = onSnapshot(query(collection(db, 'sales'), orderBy('timestamp', 'desc'), limit(10)), 
+      ));
+      unsubscribers.push(onSnapshot(query(collection(db, 'sales'), orderBy('timestamp', 'desc'), limit(10)), 
         (snapshot) => setRecentSales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale))),
         (err) => handleFirestoreError(err, OperationType.LIST, 'sales')
-      );
-      unsubCredits = onSnapshot(collection(db, 'credits'),
+      ));
+      unsubscribers.push(onSnapshot(collection(db, 'credits'),
         (snapshot) => setCredits(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Credit))),
         (err) => handleFirestoreError(err, OperationType.LIST, 'credits')
-      );
-      unsubExpenses = onSnapshot(collection(db, 'expenses'),
+      ));
+      unsubscribers.push(onSnapshot(collection(db, 'expenses'),
         (snapshot) => setExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense))),
         (err) => handleFirestoreError(err, OperationType.LIST, 'expenses')
-      );
-      unsubPayments = onSnapshot(query(collection(db, 'credit_payments'), orderBy('timestamp', 'desc'), limit(20)),
+      ));
+      unsubscribers.push(onSnapshot(query(collection(db, 'credit_payments'), orderBy('timestamp', 'desc'), limit(20)),
         (snapshot) => setCreditPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CreditPayment))),
         (err) => handleFirestoreError(err, OperationType.LIST, 'credit_payments')
-      );
+      ));
     }
 
     if ((user.role as string) === 'superadmin' || user.permissions.includes('products')) {
-      unsubProducts = onSnapshot(collection(db, 'products'), 
+      unsubscribers.push(onSnapshot(collection(db, 'products'), 
         (snapshot) => setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product))),
         (err) => handleFirestoreError(err, OperationType.LIST, 'products')
-      );
+      ));
     }
 
     return () => {
-      unsubSales();
-      unsubRecent();
-      unsubCredits();
-      unsubExpenses();
-      unsubPayments();
-      unsubProducts();
+      unsubscribers.forEach(unsub => unsub());
     };
   }, [user]);
 
   const today = new Date().toLocaleDateString();
   const todaySales = sales.filter(s => {
-    const date = s.timestamp?.toDate().toLocaleDateString();
+    const date = toDate(s.timestamp).toLocaleDateString();
     return date === today;
   });
 
   const totalRevenue = todaySales.reduce((sum, s) => sum + (s.totalAmount - (s.refundAmount || 0)), 0);
   const totalRefunds = todaySales.reduce((sum, s) => sum + (s.refundAmount || 0), 0);
-  const todayExpenses = expenses.filter(e => e.date?.toDate().toLocaleDateString() === today)
+  const todayExpenses = expenses.filter(e => toDate(e.date).toLocaleDateString() === today)
     .reduce((sum, e) => sum + e.amount, 0);
   const lowStockItems = products.filter(p => p.stockQuantity <= 5);
   const totalCredits = credits.reduce((sum, c) => sum + (c.status === 'open' ? c.outstandingBalance : 0), 0);
 
   const chartData = todaySales.map(s => ({
-    time: s.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    time: toDate(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     amount: s.totalAmount
   })).reverse();
 
@@ -342,7 +328,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <p className="text-sm font-bold text-gray-900">{sale.cashierName}</p>
-                    <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">{sale.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">{toDate(sale.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -413,8 +399,8 @@ export default function Dashboard() {
                     )}
                   </td>
                   <td className="px-4 py-4">
-                    <p className="text-sm font-bold text-gray-900">{receipt.timestamp?.toDate().toLocaleDateString()}</p>
-                    <p className="text-[10px] font-bold text-gray-500">{receipt.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-sm font-bold text-gray-900">{toDate(receipt.timestamp).toLocaleDateString()}</p>
+                    <p className="text-[10px] font-bold text-gray-500">{toDate(receipt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                   </td>
                   <td className="px-4 py-4">
                     <p className="text-sm font-bold text-gray-900">{receipt.customerName}</p>

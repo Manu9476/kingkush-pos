@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   db, 
   collection, 
@@ -6,25 +6,21 @@ import {
   orderBy, 
   onSnapshot, 
   doc, 
-  updateDoc, 
   writeBatch, 
   increment,
-  getDoc,
   getDocs,
-  where
+  where,
+  toDate
 } from '../data';
-import { Sale, SaleItem, Product } from '../types';
+import { Sale, SaleItem } from '../types';
 import { 
   Search, 
-  Calendar, 
   RotateCcw, 
   ChevronRight, 
-  Receipt,
   Printer,
   AlertCircle,
   CheckCircle,
-  X,
-  AlertTriangle
+  X
 } from 'lucide-react';
 import { useAuth } from '../App';
 import { recordAuditLog } from '../services/auditService';
@@ -40,7 +36,7 @@ export default function SalesHistory() {
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [isRefunding, setIsRefunding] = useState(false);
   const [refundReason, setRefundReason] = useState('');
-  const [isPrinting, setIsPrinting] = useState(false);
+  const [, setIsPrinting] = useState(false);
 
   // Confirm Dialog State
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -299,8 +295,7 @@ export default function SalesHistory() {
             />
           </div>
         </div>
-
-        <div className="overflow-x-auto max-h-[550px] overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
+        <div className="overflow-x-auto max-h-137.5 overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="bg-white">
@@ -330,10 +325,10 @@ export default function SalesHistory() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm font-bold text-gray-900">
-                      {new Date(sale.timestamp).toLocaleDateString()}
+                      {toDate(sale.timestamp).toLocaleDateString()}
                     </div>
                     <div className="text-[10px] text-gray-400 font-medium">
-                      {new Date(sale.timestamp).toLocaleTimeString()}
+                      {toDate(sale.timestamp).toLocaleTimeString()}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -455,7 +450,7 @@ export default function SalesHistory() {
                       value={refundReason}
                       onChange={(e) => setRefundReason(e.target.value)}
                       placeholder="e.g. Defective item, Customer changed mind..."
-                      className="w-full p-4 bg-white border border-red-100 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none text-sm min-h-[100px]"
+                  className="w-full p-4 bg-white border border-red-100 rounded-2xl focus:ring-2 focus:ring-red-500 outline-none text-sm min-h-25"
                     />
                   </div>
                   <button 

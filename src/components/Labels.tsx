@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   db, 
   collection, 
@@ -21,18 +21,14 @@ import { useAuth } from '../App';
 import { 
   Tag, 
   Plus, 
-  Trash2, 
   Save, 
   Download, 
   Share2, 
   History, 
   Printer, 
   Grid, 
-  RefreshCw,
   CheckCircle2,
-  X,
-  ChevronDown,
-  AlertTriangle
+  X
 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import { toast } from 'sonner';
@@ -287,7 +283,9 @@ export default function Labels() {
         totalLabels
       });
     } catch (error) {
-      console.error('Failed to save history', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to save history', error);
+      }
     }
 
     const printWindow = window.open('', '_blank');
@@ -303,7 +301,9 @@ export default function Labels() {
         JsBarcode(canvas, item.barcode, { format: barcodeFormat as any, width: 1, height: 30, fontSize: 10 });
         barcodeImages[item.barcode] = canvas.toDataURL("image/png");
       } catch (e) {
-        console.error('Barcode generation failed', e);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Barcode generation failed', e);
+        }
       }
     });
 
@@ -713,7 +713,9 @@ function LabelPreview({ item, format, showPrice, offsetX, offsetY }: {
           margin: 0
         });
       } catch (e) {
-        console.error('Barcode preview failed', e);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Barcode preview failed', e);
+        }
       }
     }
   }, [item.barcode, format]);

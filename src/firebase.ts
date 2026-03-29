@@ -27,8 +27,6 @@ type AuthLikeUser = {
 
 type DocumentData = Record<string, unknown>;
 
-type RefKind = 'db' | 'collection' | 'document' | 'query' | 'collectionGroup';
-
 type DBRef = {
   kind: 'db';
 };
@@ -166,7 +164,7 @@ function deepClone<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((item) => deepClone(item)) as unknown as T;
   }
-  const result: any = {};
+  const result: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value)) {
     result[k] = deepClone(v);
   }

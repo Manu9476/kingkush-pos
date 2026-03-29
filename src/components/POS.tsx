@@ -1,27 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  db, 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
+import {
+  db,
+  collection,
+  query,
+  where,
+  getDocs,
   onSnapshot,
-  addDoc, 
-  writeBatch, 
-  doc, 
-  serverTimestamp, 
+  writeBatch,
+  doc,
+  serverTimestamp,
   increment,
-  limit,
   orderBy,
-  updateDoc,
   getDoc,
   handleFirestoreError,
-  OperationType
+  OperationType,
+  toDate
 } from '../data';
-import { Product, Sale, SaleItem, Customer, SystemSettings } from '../types';
-import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Printer, X, User as UserIcon, Shield, Zap, Receipt, History, AlertTriangle } from 'lucide-react';
+import { Product, Sale, Customer, SystemSettings } from '../types';
+import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Printer, X, User as UserIcon, Shield } from 'lucide-react';
 import { useAuth } from '../App';
-import JsBarcode from 'jsbarcode';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 
@@ -54,7 +51,6 @@ export default function POS() {
   
   const [quickSearchQuery, setQuickSearchQuery] = useState('');
   const [quickSearchResults, setQuickSearchResults] = useState<Product[]>([]);
-  const [hotItems, setHotItems] = useState<Product[]>([]);
 
   // Confirm Dialog State
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -96,15 +92,13 @@ export default function POS() {
           setSettings(settingsDoc.data() as SystemSettings);
         }
       } catch (error) {
-        console.error('Error fetching settings:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error fetching settings:', error);
+        }
       }
     };
     fetchSettings();
   }, []);
-
-  useEffect(() => {
-    setHotItems(allProducts.filter(p => p.isHotItem));
-  }, [allProducts]);
 
   useEffect(() => {
     if (!user) return;
@@ -926,8 +920,8 @@ export default function POS() {
                 </div>
                 
                 <div className="flex justify-between">
-                  <span>Date: {new Date(lastSale.timestamp).toLocaleDateString()}</span>
-                  <span>Time: {new Date(lastSale.timestamp).toLocaleTimeString()}</span>
+                  <span>Date: {toDate(lastSale.timestamp).toLocaleDateString()}</span>
+                  <span>Time: {toDate(lastSale.timestamp).toLocaleTimeString()}</span>
                 </div>
                 <p>Receipt: {lastSale.id.slice(-8).toUpperCase()}</p>
                 <p>Cashier: {lastSale.cashierName}</p>
@@ -1023,8 +1017,8 @@ export default function POS() {
           
           <div className="mb-2">
             <div className="flex justify-between">
-              <span>DATE: {new Date(lastSale.timestamp).toLocaleDateString()}</span>
-              <span>TIME: {new Date(lastSale.timestamp).toLocaleTimeString()}</span>
+              <span>DATE: {toDate(lastSale.timestamp).toLocaleDateString()}</span>
+              <span>TIME: {toDate(lastSale.timestamp).toLocaleTimeString()}</span>
             </div>
             <p>RECEIPT #: {lastSale.id.toUpperCase()}</p>
             <p>CASHIER: {lastSale.cashierName.toUpperCase()}</p>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   db, 
   collection, 
@@ -15,7 +15,7 @@ import {
 } from '../data';
 import { Product, Category, Supplier, SystemSettings } from '../types';
 import { useAuth } from '../App';
-import { Plus, Search, Edit2, Trash2, Package, Barcode, AlertTriangle, X, Download, Settings as SettingsIcon } from 'lucide-react';
+import { Search, AlertTriangle } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 
 import { recordAuditLog } from '../services/auditService';
@@ -27,7 +27,6 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [skuPrefix, setSkuPrefix] = useState('KK-');
@@ -54,7 +53,9 @@ export default function Products() {
           setSkuPrefix((settingsDoc.data() as SystemSettings).skuPrefix);
         }
       } catch (error) {
-        console.error('Error fetching settings:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error fetching settings:', error);
+        }
       }
     };
     fetchSettings();
@@ -194,7 +195,6 @@ export default function Products() {
         await recordAuditLog(user!.uid, user!.displayName || user!.username, 'CREATE_PRODUCT', `Created new product: ${formData.name} (SKU: ${formData.sku})`);
         toast.success('Product created successfully');
       }
-      setIsModalOpen(false);
       resetForm();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'products');
@@ -240,7 +240,7 @@ export default function Products() {
     });
   };
 
-  const generateBarcode = (code: string, id: string) => {
+  const generateBarcode = (code: string) => {
     const canvas = document.createElement('canvas');
     JsBarcode(canvas, code, { format: "CODE128", width: 2, height: 50 });
     const link = document.createElement('a');
@@ -468,7 +468,7 @@ export default function Products() {
 
           <div className="overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
             <table className="w-full text-left">
-              <thead className="sticky top-0 bg-white z-10 shadow-sm text-gray-500 text-[10px] uppercase tracking-[0.1em] font-bold">
+              <thead className="sticky top-0 bg-white z-10 shadow-sm text-gray-500 text-[10px] uppercase tracking-widest font-bold">
                 <tr className="bg-gray-50/50">
                   <th className="px-4 py-4">Name</th>
                   <th className="px-4 py-4">SKU</th>
@@ -513,7 +513,7 @@ export default function Products() {
                           Edit
                         </button>
                         <button 
-                          onClick={() => generateBarcode(product.barcode, product.id)}
+                          onClick={() => generateBarcode(product.barcode)}
                           className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg hover:bg-indigo-700 transition-colors"
                         >
                           Barcode

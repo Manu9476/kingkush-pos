@@ -1,5 +1,4 @@
 import { db, collection, addDoc, serverTimestamp } from '../data';
-import { AuditLog } from '../types';
 
 export const recordAuditLog = async (userId: string, userName: string, action: string, details: string) => {
   try {
@@ -11,6 +10,8 @@ export const recordAuditLog = async (userId: string, userName: string, action: s
       timestamp: serverTimestamp()
     });
   } catch (error) {
-    console.error('Error recording audit log:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error recording audit log:', error);
+    }
   }
 };

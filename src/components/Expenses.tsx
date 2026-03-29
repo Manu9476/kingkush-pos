@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  db, 
-  collection, 
-  onSnapshot, 
-  query, 
-  orderBy, 
-  addDoc, 
+import {
+  db,
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  addDoc,
   deleteDoc,
   doc,
   serverTimestamp,
   handleFirestoreError,
-  OperationType
+  OperationType,
+  toDate
 } from '../data';
 import { Expense, ExpenseCategory } from '../types';
 import { useAuth } from '../App';
@@ -18,18 +19,13 @@ import {
   Plus, 
   Search, 
   Printer, 
-  Filter, 
-  DollarSign, 
-  Calendar, 
   Tag, 
   FileText,
   X,
   TrendingDown,
-  ChevronRight,
   Receipt,
   Settings2,
-  Trash2,
-  AlertTriangle
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -45,7 +41,7 @@ export default function Expenses() {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [isPrinting, setIsPrinting] = useState(false);
+  const [, setIsPrinting] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
 
   // Confirm Dialog State
@@ -305,8 +301,8 @@ export default function Expenses() {
               {filteredExpenses.map((expense) => (
                 <tr key={expense.id} className="group hover:bg-gray-50 transition-colors">
                   <td className="p-6">
-                    <p className="text-sm font-bold text-gray-900">{expense.date?.toDate().toLocaleDateString()}</p>
-                    <p className="text-[10px] font-bold text-gray-400">{expense.date?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-sm font-bold text-gray-900">{toDate(expense.date).toLocaleDateString()}</p>
+                    <p className="text-[10px] font-bold text-gray-400">{toDate(expense.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                   </td>
                   <td className="p-6">
                     <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-bold uppercase tracking-wider">
@@ -408,7 +404,7 @@ export default function Expenses() {
                       placeholder="What was this spending for?"
                       value={formData.description}
                       onChange={(e) => setFormData({...formData, description: e.target.value})}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none transition-all font-medium min-h-[100px]"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none transition-all font-medium min-h-25"
                     />
                   </div>
 
@@ -565,11 +561,11 @@ export default function Expenses() {
           <div className="space-y-2 mb-6">
             <div className="flex justify-between">
               <span>DATE:</span>
-              <span>{selectedExpense.date?.toDate().toLocaleDateString()}</span>
+              <span>{toDate(selectedExpense.date).toLocaleDateString()}</span>
             </div>
             <div className="flex justify-between">
               <span>TIME:</span>
-              <span>{selectedExpense.date?.toDate().toLocaleTimeString()}</span>
+              <span>{toDate(selectedExpense.date).toLocaleTimeString()}</span>
             </div>
             <div className="flex justify-between">
               <span>VOUCHER #:</span>

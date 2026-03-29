@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { db, auth, doc, getDoc, setDoc, OperationType, handleFirestoreError } from '../data';
+import { useState, useEffect } from 'react';
+import { db, auth, doc, getDoc, setDoc } from '../data';
 import { Shield, CheckCircle, XCircle, AlertTriangle, RefreshCw, Activity } from 'lucide-react';
 
 interface HealthStatus {
@@ -89,7 +89,7 @@ export default function ReadinessPanel() {
         } else {
           profileStatus = { service: 'User Profile', status: 'warning', message: 'Profile document missing' };
         }
-      } catch (err: any) {
+      } catch {
         profileStatus = { service: 'User Profile', status: 'error', message: 'Failed to fetch profile' };
       }
     } else {

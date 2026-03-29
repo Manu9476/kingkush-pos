@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   db, 
   collection, 
@@ -11,9 +11,7 @@ import {
   serverTimestamp,
   increment,
   handleFirestoreError,
-  OperationType,
-  getDocs,
-  where
+  OperationType
 } from '../data';
 import { Product, InventoryTransaction, Supplier } from '../types';
 import { 
@@ -206,7 +204,6 @@ export default function Inventory() {
     }
   };
 
-  const lowStock = products.filter(p => p.stockQuantity <= 5);
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
@@ -498,7 +495,7 @@ export default function Inventory() {
                 />
               </div>
             </div>
-            <div className="overflow-x-auto max-h-[450px] overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
+            <div className="overflow-x-auto max-h-[112.5] overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
               <table className="w-full text-left">
                 <thead className="sticky top-0 bg-white z-10 shadow-sm text-[10px] uppercase font-bold text-gray-600 tracking-widest border-b border-gray-100">
                   <tr className="bg-white">
@@ -540,7 +537,7 @@ export default function Inventory() {
 
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
             <h3 className="text-xl font-bold text-gray-900 mb-8">Stock Movement</h3>
-            <div className="max-h-[450px] overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl p-6 shadow-inner bg-gray-50/30">
+            <div className="max-h-112.5 overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl p-6 shadow-inner bg-gray-50/30">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {transactions.map(t => {
                   const product = products.find(p => p.id === t.productId);
@@ -578,4 +575,3 @@ export default function Inventory() {
     </div>
   );
 }
-

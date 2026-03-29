@@ -54,11 +54,15 @@ const renderStartupError = (error: unknown) => {
 };
 
 window.addEventListener('error', (event) => {
-  console.error('Global runtime error:', event.error || event.message);
+  if (process.env.NODE_ENV === 'development') {
+    console.error('Global runtime error:', event.error || event.message);
+  }
 });
 
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection:', event.reason);
+  if (process.env.NODE_ENV === 'development') {
+    console.error('Unhandled promise rejection:', event.reason);
+  }
 });
 
 void import('./App.tsx')
@@ -70,6 +74,8 @@ void import('./App.tsx')
     );
   })
   .catch((error) => {
-    console.error('Fatal startup import error:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Fatal startup import error:', error);
+    }
     renderStartupError(error);
   });

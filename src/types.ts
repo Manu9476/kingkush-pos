@@ -75,7 +75,7 @@ export interface Sale {
   customerName?: string;
   customerId?: string;
   reference?: string;
-  timestamp: any; // Timestamp-like value
+  timestamp: { toDate: () => Date } | Date | string | { seconds: number; nanoseconds: number } | null;
   isCredit?: boolean;
   isRefunded?: boolean;
   refundAmount?: number;
@@ -160,8 +160,8 @@ export interface LabelTemplate {
   ownerId: string;
   sharedWith: string[];
   isDefault?: boolean;
-  createdAt: any;
-  updatedAt: any;
+  createdAt: { toDate: () => Date } | Date | string | { seconds: number; nanoseconds: number };
+  updatedAt: { toDate: () => Date } | Date | string | { seconds: number; nanoseconds: number };
 }
 
 export interface Expense {
@@ -169,7 +169,7 @@ export interface Expense {
   category: string;
   description: string;
   amount: number;
-  date: any; // Timestamp-like value
+  date: { toDate: () => Date } | Date | string | { seconds: number; nanoseconds: number } | null;
   paymentMethod: 'cash' | 'mpesa' | 'bank' | 'other';
   reference?: string;
   recordedBy: string; // User ID
@@ -189,7 +189,7 @@ export interface AuditLog {
   userName: string;
   action: string;
   details: string;
-  timestamp: any;
+  timestamp: { toDate: () => Date } | Date | string | { seconds: number; nanoseconds: number } | null;
 }
 
 export interface PurchaseOrder {
@@ -208,5 +208,5 @@ export interface PurchaseOrder {
   createdBy?: string;
   receivedBy?: string;
   createdAt: any;
-  receivedAt?: any;
+  receivedAt?: { toDate: () => Date } | Date | string | { seconds: number; nanoseconds: number };
 }

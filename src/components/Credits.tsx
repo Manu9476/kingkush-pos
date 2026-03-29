@@ -1,16 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { CreditCard, Search, Filter, Plus, CheckCircle, Printer, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CreditCard, Search, CheckCircle, Printer, AlertTriangle } from 'lucide-react';
 import { 
   db, 
   collection, 
   query, 
   where, 
-  getDocs, 
   getDoc,
   onSnapshot, 
   doc, 
-  updateDoc, 
-  addDoc, 
   serverTimestamp, 
   writeBatch,
   increment,
@@ -19,7 +16,6 @@ import {
 } from '../data';
 import { Credit, CreditPayment, SystemSettings } from '../types';
 import { useAuth } from '../App';
-import { AlertTriangle } from 'lucide-react';
 
 export default function Credits() {
   const { user } = useAuth();
@@ -32,7 +28,7 @@ export default function Credits() {
   const [paymentReference, setPaymentReference] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
+  const [, setIsPrinting] = useState(false);
   const [lastPayment, setLastPayment] = useState<CreditPayment | null>(null);
 
   useEffect(() => {
@@ -130,7 +126,7 @@ export default function Credits() {
     }
   };
 
-  const handlePrintReceipt = (payment: CreditPayment, credit: Credit | null) => {
+  const handlePrintReceipt = (payment: CreditPayment) => {
     setLastPayment(payment);
     setIsPrinting(true);
     setTimeout(() => {
@@ -216,7 +212,7 @@ export default function Credits() {
                               )}
                             </div>
                           </td>
-                          <td className="py-4 px-2 text-gray-600 max-w-[200px] truncate">{credit.items}</td>
+                          <td className="py-4 px-2 text-gray-600 max-w-50 truncate">{credit.items}</td>
                           <td className="py-4 px-2 text-right font-medium">{credit.totalAmount.toLocaleString()}</td>
                           <td className="py-4 px-2 text-right text-gray-600">{credit.amountPaid.toLocaleString()}</td>
                           <td className="py-4 px-2 text-right font-bold text-indigo-600">{credit.outstandingBalance.toLocaleString()}</td>
@@ -320,7 +316,7 @@ export default function Credits() {
                   {isProcessing ? 'Processing...' : 'Save Payment'}
                 </button>
                 <button 
-                  onClick={() => lastPayment && handlePrintReceipt(lastPayment, selectedCredit)}
+                  onClick={() => lastPayment && handlePrintReceipt(lastPayment)}
                   disabled={!lastPayment}
                   className="w-full py-4 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition-all disabled:opacity-50"
                 >
@@ -350,7 +346,7 @@ export default function Credits() {
               )}
               <div className="space-y-3">
                 <button 
-                  onClick={() => lastPayment && handlePrintReceipt(lastPayment, null)}
+                  onClick={() => lastPayment && handlePrintReceipt(lastPayment)}
                   className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
                 >
                   <Printer className="w-5 h-5" />

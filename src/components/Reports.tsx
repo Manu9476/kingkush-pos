@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  db, 
-  collection, 
-  getDocs, 
-  query, 
-  orderBy, 
+import { useState, useEffect } from 'react';
+import {
+  db,
+  collection,
+  getDocs,
+  query,
+  orderBy,
   where,
   getDoc,
   doc,
   collectionGroup,
   handleFirestoreError,
-  OperationType
+  OperationType,
+  toDate
 } from '../data';
-import { Sale, Product, SaleItem, Expense, Customer } from '../types';
+import { Sale, Product, Expense } from '../types';
 import { useAuth } from '../App';
 import { 
   XAxis, 
@@ -34,16 +35,13 @@ export default function Reports() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [credits, setCredits] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [activePeriod, setActivePeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
   useEffect(() => {
-    const fetchData = async () => {
+      const fetchData = async () => {
       if (!user) return;
-      setLoading(true);
       try {
         const salesSnapshot = await getDocs(query(collection(db, 'sales'), orderBy('timestamp', 'desc')));
         const salesData = salesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
@@ -57,10 +55,6 @@ export default function Reports() {
         const expensesData = expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
         setExpenses(expensesData);
 
-        const customersSnapshot = await getDocs(collection(db, 'customers'));
-        const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-        setCustomers(customersData);
-
         const creditsSnapshot = await getDocs(query(collection(db, 'credits'), where('status', '==', 'open')));
         setCredits(creditsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
@@ -70,15 +64,12 @@ export default function Reports() {
         }
       } catch (err) {
         handleFirestoreError(err, OperationType.LIST, 'reports');
-      } finally {
-        setLoading(false);
       }
     };
     fetchData();
   }, [user]);
 
   const totalRevenue = sales.reduce((sum, s) => sum + (s.totalAmount - (s.refundAmount || 0)), 0);
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
   const avgSale = sales.length > 0 ? totalRevenue / sales.length : 0;
 
   const lowStockProducts = products.filter(p => p.stockQuantity <= (p.lowStockThreshold || 5));
@@ -132,8 +123,8 @@ export default function Reports() {
       startDate = new Date(now.getFullYear(), now.getMonth(), 1); // Start of month
     }
 
-    const filteredSales = sales.filter(s => s.timestamp?.toDate() >= startDate);
-    const filteredExpenses = expenses.filter(e => e.date?.toDate() >= startDate);
+    const filteredSales = sales.filter(s => toDate(s.timestamp) >= startDate);
+    const filteredExpenses = expenses.filter(e => toDate(e.date) >= startDate);
 
     return { filteredSales, filteredExpenses };
   };
@@ -154,7 +145,7 @@ export default function Reports() {
 
   const profitStats = calculateProfitEstimate(activePeriod);
 
-  const downloadCSV = (data: any[], filename: string, title?: string) => {
+  const downloadCSV = (data: Record<string, unknown>[], filename: string, title?: string) => {
     if (data.length === 0) {
       toast.error("No data to export");
       return;
@@ -188,10 +179,10 @@ export default function Reports() {
 
   const exportDailyCSV = () => {
     const today = new Date().toLocaleDateString();
-    const todaySales = sales.filter(s => s.timestamp?.toDate().toLocaleDateString() === today);
-    const exportData: any[] = todaySales.map(s => ({
+    const todaySales = sales.filter(s => toDate(s.timestamp).toLocaleDateString() === today);
+    const exportData: Record<string, unknown>[] = todaySales.map(s => ({
       'Sale ID': s.id,
-      'Date': s.timestamp?.toDate().toLocaleString(),
+      'Date': toDate(s.timestamp).toLocaleString(),
       'Cashier': s.cashierName,
       'Customer': s.customerName || 'N/A',
       'Original Amount': s.totalAmount,
@@ -228,7 +219,7 @@ export default function Reports() {
   };
 
   const exportInventoryCSV = () => {
-    const exportData: any[] = products.map(p => ({
+    const exportData: Record<string, unknown>[] = products.map(p => ({
       'SKU': p.sku,
       'Barcode': p.barcode,
       'Product Name': p.name,
@@ -265,12 +256,11 @@ export default function Reports() {
   };
 
   const exportProfitCSV = async () => {
-    setLoading(true);
     const toastId = toast.loading("Preparing profit report... This may take a moment.");
     try {
       const { filteredSales } = getFilteredData(activePeriod);
       const saleIds = new Set(filteredSales.map(s => s.id));
-      const profitRows: any[] = [];
+      const profitRows: Record<string, unknown>[] = [];
       
       // Use collection group query for much better performance (one query instead of N)
       const itemsSnapshot = await getDocs(query(collectionGroup(db, 'items')));
@@ -293,7 +283,7 @@ export default function Reports() {
           const buyingPrice = product?.buyingPrice || 0;
           const profit = item.totalPrice - (buyingPrice * item.quantity);
           profitRows.push({
-            'Date': sale.timestamp?.toDate().toLocaleString(),
+            'Date': toDate(sale.timestamp).toLocaleString(),
             'Sale ID': sale.id,
             'Product': item.productName,
             'Quantity': item.quantity,
@@ -307,10 +297,10 @@ export default function Reports() {
       }
 
       // Add Totals
-      const totalQty = profitRows.reduce((sum, r) => sum + r['Quantity'], 0);
-      const totalCost = profitRows.reduce((sum, r) => sum + r['Total Cost'], 0);
-      const totalRevenue = profitRows.reduce((sum, r) => sum + r['Total Revenue'], 0);
-      const totalProfit = profitRows.reduce((sum, r) => sum + r['Profit'], 0);
+      const totalQty = profitRows.reduce((sum, r) => sum + Number(r['Quantity'] ?? 0), 0);
+      const totalCost = profitRows.reduce((sum, r) => sum + Number(r['Total Cost'] ?? 0), 0);
+      const totalRevenue = profitRows.reduce((sum, r) => sum + Number(r['Total Revenue'] ?? 0), 0);
+      const totalProfit = profitRows.reduce((sum, r) => sum + Number(r['Profit'] ?? 0), 0);
 
       profitRows.push({
         'Date': 'TOTAL',
@@ -332,7 +322,7 @@ export default function Reports() {
     } catch (err) {
       handleFirestoreError(err, OperationType.LIST, 'sales_items');
     } finally {
-      setLoading(false);
+      toast.dismiss(toastId);
     }
   };
 
@@ -357,9 +347,9 @@ export default function Reports() {
   };
   
   const exportExpensesCSV = () => {
-    const exportData: any[] = expenses.map(e => ({
+    const exportData: Record<string, unknown>[] = expenses.map(e => ({
       'ID': e.id,
-      'Date': e.date?.toDate().toLocaleString(),
+      'Date': typeof e.date === 'string' ? e.date : (e.date && typeof e.date === 'object' && 'toDate' in e.date ? (e.date as any).toDate().toLocaleString() : e.date instanceof Date ? e.date.toLocaleString() : ''),
       'Category': e.category,
       'Description': e.description,
       'Amount': e.amount,
@@ -410,9 +400,9 @@ export default function Reports() {
           </button>
           <button 
             onClick={() => {
-              const exportData: any[] = sales.map(s => ({
+              const exportData: Record<string, unknown>[] = sales.map(s => ({
                 ID: s.id,
-                Date: s.timestamp?.toDate().toLocaleString(),
+                Date: s.timestamp ? (typeof s.timestamp === 'string' ? s.timestamp : toDate(s.timestamp).toLocaleString()) : '',
                 'Original Amount': s.totalAmount,
                 'Refunded Amount': s.refundAmount || 0,
                 'Net Amount': s.totalAmount - (s.refundAmount || 0),
@@ -639,7 +629,7 @@ export default function Reports() {
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {paymentData.map((entry, index) => (
+                    {paymentData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>

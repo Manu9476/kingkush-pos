@@ -13,8 +13,6 @@ import {
   where,
   getDocs,
   auth,
-  signInWithEmailAndPassword,
-  signOut,
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
@@ -23,7 +21,7 @@ import {
 } from '../data';
 import { UserProfile } from '../types';
 import { useAuth } from '../App';
-import { Shield, User, Lock, CheckCircle2, XCircle, Key, Trash2, ShieldCheck, AlertCircle, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { User, Lock, CheckCircle2, XCircle, Key, Trash2, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 

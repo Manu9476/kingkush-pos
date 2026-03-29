@@ -1,4 +1,5 @@
 import React, { Component, createContext, useContext, useState, useEffect } from 'react';
+import type { ErrorInfo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { 
   db, 
@@ -6,17 +7,9 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
-  collection, 
-  onSnapshot, 
   updateDoc, 
   doc, 
   setDoc,
-  deleteDoc,
-  handleFirestoreError,
-  OperationType,
-  query,
-  where,
-  getDocs,
   getDoc,
   createUserWithEmailAndPassword
 } from './data';
@@ -27,10 +20,8 @@ import {
   ShoppingCart, 
   BarChart3, 
   LogOut, 
-  User, 
   Menu, 
   X,
-  Store,
   Shield,
   CreditCard,
   ClipboardList,
@@ -68,7 +59,7 @@ interface ErrorBoundaryProps {
 
 interface ErrorBoundaryState {
   hasError: boolean;
-  error: any;
+  error: unknown;
 }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
@@ -77,12 +68,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error: any) {
+  static getDerivedStateFromError(error: unknown) {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error('ErrorBoundary caught an error', error, errorInfo);
+  componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('ErrorBoundary caught an error', error, errorInfo);
+    }
   }
 
   render() {
@@ -96,7 +89,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <h1 className="text-2xl font-bold text-gray-900">Something went wrong</h1>
             <p className="text-gray-600">The application encountered an unexpected error. Please try refreshing the page.</p>
             <div className="text-left bg-gray-50 p-4 rounded-xl overflow-auto max-h-40">
-              <code className="text-xs text-red-500">{this.state.error?.message || String(this.state.error)}</code>
+              <code className="text-xs text-red-500">{this.state.error instanceof Error ? this.state.error.message : String(this.state.error)}</code>
             </div>
             <button 
               onClick={() => window.location.reload()}
@@ -329,7 +322,7 @@ export default function App() {
     try {
       // 1. Try account sign in
       await signInWithEmailAndPassword(auth, email, password);
-    } catch (authErr: any) {
+    } catch (authErr: unknown) {
       // 2. If it fails, check if it's the bootstrap admin
       if (username.toLowerCase() === 'admin' && password === 'admin123') {
         try {
@@ -354,8 +347,8 @@ export default function App() {
           setUser(newUser);
           localStorage.setItem('pos_user', JSON.stringify(newUser));
           return;
-        } catch (createErr: any) {
-          if (createErr.code === 'auth/email-already-in-use') {
+        } catch (createErr: unknown) {
+          if (createErr instanceof Error && 'code' in createErr && createErr.code === 'auth/email-already-in-use') {
             console.error('Bootstrap admin already exists in Auth but sign-in failed.');
           } else {
             console.error('Bootstrap create error:', createErr);
@@ -402,9 +395,9 @@ export default function App() {
 
       setUser(userData);
       localStorage.setItem('pos_user', JSON.stringify(userData));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Profile fetch error:', err);
-      throw new Error(err.message || 'Failed to load user profile');
+      throw new Error(err instanceof Error ? err.message : 'Failed to load user profile');
     }
   };
 

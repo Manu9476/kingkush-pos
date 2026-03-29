@@ -15,7 +15,7 @@ import {
 } from '../data';
 import { Customer, Credit } from '../types';
 import { useAuth } from '../App';
-import { Plus, Search, Edit2, Trash2, User, Phone, Mail, MapPin, X, CreditCard, History, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Phone, Mail, MapPin, CreditCard, History, X } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 
@@ -77,7 +77,9 @@ export default function Customers() {
           const newCode = `C-${Math.floor(1000 + Math.random() * 9000)}`;
           await updateDoc(doc(db, 'customers', c.id), { customerCode: newCode });
         } catch (error) {
-          console.error('Error auto-assigning customer code:', error);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Error auto-assigning customer code:', error);
+          }
         }
       });
     }

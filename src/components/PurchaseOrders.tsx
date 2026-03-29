@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   db, 
   collection, 
@@ -11,9 +11,9 @@ import {
   orderBy,
   writeBatch,
   increment,
-  getDoc,
   handleFirestoreError,
-  OperationType
+  OperationType,
+  toDate
 } from '../data';
 import { PurchaseOrder, Product, Supplier, Category } from '../types';
 import { useAuth } from '../App';
@@ -21,16 +21,12 @@ import {
   Plus, 
   Search, 
   Truck, 
-  Package, 
   CheckCircle, 
   X, 
   ChevronRight,
-  Clock,
   AlertCircle,
   Edit2,
-  Trash2,
-  Save,
-  AlertTriangle
+  Trash2
 } from 'lucide-react';
 import { recordAuditLog } from '../services/auditService';
 import { toast } from 'sonner';
@@ -705,7 +701,7 @@ export default function PurchaseOrders() {
                   <div className="grid grid-cols-2 gap-4 text-xs">
                     <div>
                       <p className="text-green-400 font-bold uppercase tracking-widest mb-1">Received At</p>
-                      <p className="text-green-900 font-bold">{new Date(selectedOrder.receivedAt!).toLocaleString()}</p>
+                      <p className="text-green-900 font-bold">{toDate(selectedOrder.receivedAt!).toLocaleString()}</p>
                     </div>
                     <div>
                       <p className="text-green-400 font-bold uppercase tracking-widest mb-1">Received By</p>

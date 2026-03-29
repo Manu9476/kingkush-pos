@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   db, 
   collection, 
@@ -11,15 +11,11 @@ import {
 } from '../data';
 import { AuditLog } from '../types';
 import { 
-  History, 
   Search, 
-  User, 
   Clock, 
   Activity,
-  ChevronRight,
   Download,
   Printer,
-  FileText,
   X
 } from 'lucide-react';
 
@@ -27,7 +23,7 @@ export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
-  const [isPrinting, setIsPrinting] = useState(false);
+  const [, setIsPrinting] = useState(false);
   const [printType, setPrintType] = useState<'a4' | 'thermal' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -36,7 +32,7 @@ export default function AuditLogs() {
 SYSTEM AUDIT LOG REPORT
 -----------------------
 Log ID: ${log.id}
-Timestamp: ${log.timestamp ? new Date(log.timestamp.toDate()).toLocaleString() : 'N/A'}
+Timestamp: ${log.timestamp && typeof log.timestamp === 'object' && 'toDate' in log.timestamp ? new Date(log.timestamp.toDate()).toLocaleString() : typeof log.timestamp === 'string' ? new Date(log.timestamp).toLocaleString() : 'N/A'}
 User: ${log.userName} (ID: ${log.userId})
 Action: ${log.action}
 Details: ${log.details}
@@ -55,7 +51,7 @@ Generated on: ${new Date().toLocaleString()}
     URL.revokeObjectURL(url);
   };
 
-  const printLog = (log: AuditLog, type: 'a4' | 'thermal') => {
+  const printLog = (type: 'a4' | 'thermal') => {
     setPrintType(type);
     setIsPrinting(true);
     setTimeout(() => {
@@ -149,10 +145,10 @@ Generated on: ${new Date().toLocaleString()}
                       </div>
                       <div>
                         <div className="text-sm font-bold text-gray-900">
-                          {log.timestamp?.toDate ? log.timestamp.toDate().toLocaleDateString() : 'Just now'}
+                          {log.timestamp && typeof log.timestamp === 'object' && 'toDate' in log.timestamp ? log.timestamp.toDate().toLocaleDateString() : typeof log.timestamp === 'string' ? new Date(log.timestamp).toLocaleDateString() : 'Just now'}
                         </div>
                         <div className="text-[10px] text-gray-400 font-medium">
-                          {log.timestamp?.toDate ? log.timestamp.toDate().toLocaleTimeString() : ''}
+                          {log.timestamp && typeof log.timestamp === 'object' && 'toDate' in log.timestamp ? log.timestamp.toDate().toLocaleTimeString() : typeof log.timestamp === 'string' ? new Date(log.timestamp).toLocaleTimeString() : ''}
                         </div>
                       </div>
                     </div>
@@ -218,7 +214,7 @@ Generated on: ${new Date().toLocaleString()}
                 <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Timestamp</p>
                   <p className="text-sm font-bold text-gray-900">
-                    {selectedLog.timestamp?.toDate ? selectedLog.timestamp.toDate().toLocaleString() : 'N/A'}
+                    {selectedLog.timestamp && typeof selectedLog.timestamp === 'object' && 'toDate' in selectedLog.timestamp ? selectedLog.timestamp.toDate().toLocaleString() : typeof selectedLog.timestamp === 'string' ? new Date(selectedLog.timestamp).toLocaleString() : 'N/A'}
                   </p>
                 </div>
                 <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
@@ -243,14 +239,14 @@ Generated on: ${new Date().toLocaleString()}
 
               <div className="flex flex-wrap gap-4">
                 <button 
-                  onClick={() => printLog(selectedLog, 'a4')}
+                  onClick={() => printLog('a4')}
                   className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
                 >
                   <Printer className="w-5 h-5" />
                   Print A4 Report
                 </button>
                 <button 
-                  onClick={() => printLog(selectedLog, 'thermal')}
+                  onClick={() => printLog('thermal')}
                   className="flex-1 py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-lg shadow-gray-100 hover:bg-black transition-all flex items-center justify-center gap-2"
                 >
                   <Printer className="w-5 h-5" />
@@ -286,7 +282,7 @@ Generated on: ${new Date().toLocaleString()}
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Timestamp</p>
-                  <p className="text-lg font-bold">{selectedLog.timestamp?.toDate ? selectedLog.timestamp.toDate().toLocaleString() : 'N/A'}</p>
+                  <p className="text-lg font-bold">{selectedLog.timestamp && typeof selectedLog.timestamp === 'object' && 'toDate' in selectedLog.timestamp ? selectedLog.timestamp.toDate().toLocaleString() : typeof selectedLog.timestamp === 'string' ? new Date(selectedLog.timestamp).toLocaleString() : 'N/A'}</p>
                 </div>
               </div>
               <div className="space-y-4">
@@ -332,8 +328,8 @@ Generated on: ${new Date().toLocaleString()}
             
             <div className="space-y-2 mb-4">
               <p>ID: {selectedLog.id.slice(-12).toUpperCase()}</p>
-              <p>DATE: {selectedLog.timestamp?.toDate ? selectedLog.timestamp.toDate().toLocaleDateString() : 'N/A'}</p>
-              <p>TIME: {selectedLog.timestamp?.toDate ? selectedLog.timestamp.toDate().toLocaleTimeString() : 'N/A'}</p>
+              <p>DATE: {selectedLog.timestamp && typeof selectedLog.timestamp === 'object' && 'toDate' in selectedLog.timestamp ? selectedLog.timestamp.toDate().toLocaleDateString() : typeof selectedLog.timestamp === 'string' ? new Date(selectedLog.timestamp).toLocaleDateString() : 'N/A'}</p>
+              <p>TIME: {selectedLog.timestamp && typeof selectedLog.timestamp === 'object' && 'toDate' in selectedLog.timestamp ? selectedLog.timestamp.toDate().toLocaleTimeString() : typeof selectedLog.timestamp === 'string' ? new Date(selectedLog.timestamp).toLocaleTimeString() : 'N/A'}</p>
               <p>USER: {(selectedLog.userName || 'Unknown').toUpperCase()}</p>
               <p>ACTION: {(selectedLog.action || 'Unknown').toUpperCase()}</p>
               <p>********************************</p>
