@@ -136,7 +136,7 @@ const explicitCollections: Record<string, ExplicitConfig> = {
   },
   branches: {
     table: 'branches',
-    readPermissions: ['branches', 'settings', 'pos', 'reports', 'inventory', 'users'],
+    readPermissions: ['branches', 'settings', 'pos', 'reports', 'inventory', 'users', 'purchase-orders'],
     writePermissions: ['branches', 'settings'],
     fieldMap: {
       code: { column: 'code', type: 'text' },
@@ -254,7 +254,7 @@ const explicitCollections: Record<string, ExplicitConfig> = {
 Object.assign(explicitCollections, {
   sales: {
     table: 'sales',
-    readPermissions: ['pos', 'reports'],
+    readPermissions: ['pos', 'sales-history', 'customers', 'reports'],
     fieldMap: {
       cashierId: { column: 'cashier_id', type: 'text' },
       cashierName: { column: 'cashier_name', type: 'text' },
@@ -306,7 +306,7 @@ Object.assign(explicitCollections, {
   },
   credits: {
     table: 'credits',
-    readPermissions: ['credits', 'pos', 'reports'],
+    readPermissions: ['credits', 'pos', 'customers', 'reports'],
     fieldMap: {
       saleId: { column: 'sale_id', type: 'text' },
       customerId: { column: 'customer_id', type: 'text' },
@@ -499,8 +499,8 @@ Object.assign(explicitCollections, {
 });
 
 const genericCollections: Record<string, { readPermissions: string[]; writePermissions: string[]; allowDelete?: boolean }> = {
-  categories: { readPermissions: ['products', 'purchase-orders'], writePermissions: ['products', 'categories'], allowDelete: true },
-  suppliers: { readPermissions: ['inventory', 'purchase-orders'], writePermissions: ['inventory', 'suppliers', 'purchase-orders'], allowDelete: true },
+  categories: { readPermissions: ['categories', 'products', 'purchase-orders'], writePermissions: ['products', 'categories'], allowDelete: true },
+  suppliers: { readPermissions: ['suppliers', 'inventory', 'purchase-orders'], writePermissions: ['inventory', 'suppliers', 'purchase-orders'], allowDelete: true },
   expenses: { readPermissions: ['expenses', 'reports'], writePermissions: ['expenses'], allowDelete: true },
   expense_categories: { readPermissions: ['expenses'], writePermissions: ['expenses'], allowDelete: true },
   purchase_orders: { readPermissions: ['purchase-orders', 'suppliers', 'inventory'], writePermissions: ['purchase-orders'], allowDelete: true },
@@ -586,7 +586,7 @@ async function readDocument(path: string, user: SessionUserLike, client?: PoolCl
   const target = parsePath(path);
 
   if (target.type === 'saleItemDoc') {
-    ensureAnyPermission(user, ['pos', 'reports']);
+    ensureAnyPermission(user, ['pos', 'sales-history', 'reports']);
     const row = await queryOne<Record<string, unknown>>(
       'SELECT * FROM sale_items WHERE id = $1 AND sale_id = $2 LIMIT 1',
       [target.itemId, target.saleId],
@@ -647,7 +647,7 @@ async function readQuery(
     if (source.collectionId !== 'items') {
       throw new Error(`Unsupported collection group: ${source.collectionId}`);
     }
-    ensureAnyPermission(user, ['pos', 'reports']);
+    ensureAnyPermission(user, ['pos', 'sales-history', 'reports']);
     const queryParts = buildExplicitQuery(
       {
         table: 'sale_items',
@@ -677,7 +677,7 @@ async function readQuery(
 
   const collectionTarget = parseCollectionPath(source.path);
   if (collectionTarget.type === 'saleItemsCollection') {
-    ensureAnyPermission(user, ['pos', 'reports']);
+    ensureAnyPermission(user, ['pos', 'sales-history', 'reports']);
     const queryParts = buildExplicitQuery(
       {
         table: 'sale_items',

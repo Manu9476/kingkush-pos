@@ -474,17 +474,29 @@ export function writeBatch(_db: DBRef) {
 }
 
 export function onSnapshot(
+  source: DocumentRef,
+  onNext: (snapshot: DocumentSnapshot) => void,
+  onError?: (error: unknown) => void
+): () => void;
+export function onSnapshot(
   source: CollectionRef | QueryRef,
   onNext: (snapshot: QuerySnapshot) => void,
+  onError?: (error: unknown) => void
+): () => void;
+export function onSnapshot(
+  source: DocumentRef | CollectionRef | QueryRef,
+  onNext: ((snapshot: DocumentSnapshot) => void) | ((snapshot: QuerySnapshot) => void),
   onError?: (error: unknown) => void
 ) {
   let active = true;
 
   const refresh = async () => {
     try {
-      const snapshot = await getDocs(source.kind === 'collection' ? source : source);
+      const snapshot = source.kind === 'document'
+        ? await getDoc(source)
+        : await getDocs(source);
       if (active) {
-        onNext(snapshot);
+        onNext(snapshot as never);
       }
     } catch (error) {
       if (active) {

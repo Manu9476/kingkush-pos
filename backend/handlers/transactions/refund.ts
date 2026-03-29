@@ -11,7 +11,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const user = await requirePermission(req, res, ['pos']);
+    const user = await requirePermission(req, res, ['pos', 'sales-history']);
     if (!user) {
       return;
     }

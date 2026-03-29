@@ -5,10 +5,10 @@ import {
   db, 
   auth,
   onAuthStateChanged,
+  onSnapshot,
   signInWithEmailAndPassword,
   signOut,
-  doc, 
-  getDoc
+  doc
 } from './data';
 import { UserProfile } from './types';
 import { bootstrapSuperadmin, getSetupStatus } from './services/platformApi';
@@ -124,36 +124,54 @@ export const useAuth = () => {
   return context;
 };
 
+type AppModule = {
+  id: string;
+  label: string;
+  path: string;
+  icon: React.ComponentType<{ className?: string }>;
+  permissions: string[];
+};
+
+const APP_MODULES: AppModule[] = [
+  { id: 'dashboard', label: 'Dashboard', path: '/', icon: LayoutDashboard, permissions: ['dashboard'] },
+  { id: 'pos', label: 'Sale', path: '/pos', icon: ShoppingCart, permissions: ['pos'] },
+  { id: 'sales-history', label: 'Sales History', path: '/sales-history', icon: Receipt, permissions: ['sales-history'] },
+  { id: 'shifts', label: 'Cash Shifts', path: '/cash-shifts', icon: Banknote, permissions: ['shifts', 'pos'] },
+  { id: 'customers', label: 'Customers', path: '/customers', icon: UsersIcon, permissions: ['customers'] },
+  { id: 'credits', label: 'Credits', path: '/credits', icon: CreditCard, permissions: ['credits'] },
+  { id: 'products', label: 'Products', path: '/products', icon: Package, permissions: ['products'] },
+  { id: 'categories', label: 'Categories', path: '/categories', icon: FolderTree, permissions: ['categories'] },
+  { id: 'inventory', label: 'Inventory', path: '/inventory', icon: ClipboardList, permissions: ['inventory'] },
+  { id: 'purchase-orders', label: 'Purchase Orders', path: '/purchase-orders', icon: Truck, permissions: ['purchase-orders'] },
+  { id: 'suppliers', label: 'Suppliers', path: '/suppliers', icon: Truck, permissions: ['suppliers'] },
+  { id: 'branches', label: 'Branches', path: '/branches', icon: Building2, permissions: ['branches'] },
+  { id: 'labels', label: 'Labels', path: '/labels', icon: Tag, permissions: ['labels'] },
+  { id: 'reports', label: 'Reports', path: '/reports', icon: BarChart3, permissions: ['reports'] },
+  { id: 'expenses', label: 'Expenses', path: '/expenses', icon: Receipt, permissions: ['expenses'] },
+  { id: 'users', label: 'Users', path: '/users', icon: UsersIcon, permissions: ['users'] },
+  { id: 'audit-logs', label: 'Audit Logs', path: '/audit-logs', icon: HistoryIcon, permissions: ['audit-logs'] },
+  { id: 'settings', label: 'Settings', path: '/settings', icon: Shield, permissions: ['settings'] },
+  { id: 'status', label: 'System Status', path: '/status', icon: Shield, permissions: ['status'] }
+];
+
+function userHasAnyPermission(user: UserProfile | null | undefined, permissionIds: string[]) {
+  if (!user) {
+    return false;
+  }
+
+  if (user.role === 'superadmin') {
+    return true;
+  }
+
+  return permissionIds.some((permissionId) => user.permissions?.includes(permissionId));
+}
+
 function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { id: 'pos', label: 'Sale', path: '/pos', icon: ShoppingCart },
-    { id: 'sales-history', label: 'Sales History', path: '/sales-history', icon: Receipt },
-    { id: 'shifts', label: 'Cash Shifts', path: '/cash-shifts', icon: Banknote },
-    { id: 'customers', label: 'Customers', path: '/customers', icon: UsersIcon },
-    { id: 'credits', label: 'Credits', path: '/credits', icon: CreditCard },
-    { id: 'products', label: 'Products', path: '/products', icon: Package },
-    { id: 'categories', label: 'Categories', path: '/categories', icon: FolderTree },
-    { id: 'inventory', label: 'Inventory', path: '/inventory', icon: ClipboardList },
-    { id: 'purchase-orders', label: 'Purchase Orders', path: '/purchase-orders', icon: Truck },
-    { id: 'suppliers', label: 'Suppliers', path: '/suppliers', icon: Truck },
-    { id: 'branches', label: 'Branches', path: '/branches', icon: Building2 },
-    { id: 'labels', label: 'Labels', path: '/labels', icon: Tag },
-    { id: 'reports', label: 'Reports', path: '/reports', icon: BarChart3 },
-    { id: 'expenses', label: 'Expenses', path: '/expenses', icon: Receipt },
-    { id: 'users', label: 'Users', path: '/users', icon: UsersIcon },
-    { id: 'audit-logs', label: 'Audit Logs', path: '/audit-logs', icon: HistoryIcon },
-    { id: 'settings', label: 'Settings', path: '/settings', icon: Shield },
-    { id: 'status', label: 'System Status', path: '/status', icon: Shield },
-  ];
-
-  const filteredNav = navItems.filter(item => 
-    user?.role === 'superadmin' || user?.permissions?.includes(item.id)
-  );
+  const filteredNav = APP_MODULES.filter((item) => userHasAnyPermission(user, item.permissions));
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
@@ -244,6 +262,7 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
+    let unsubProfile: (() => void) | null = null;
 
     const initialize = async () => {
       try {
@@ -260,9 +279,14 @@ export default function App() {
 
     void initialize();
 
-    const unsubAuth = onAuthStateChanged(auth, async (authUser) => {
+    const unsubAuth = onAuthStateChanged(auth, (authUser) => {
       if (!isMounted) {
         return;
+      }
+
+      if (unsubProfile) {
+        unsubProfile();
+        unsubProfile = null;
       }
 
       if (!authUser) {
@@ -271,32 +295,56 @@ export default function App() {
         return;
       }
 
-      try {
-        const userDoc = await getDoc(doc(db, 'users', authUser.uid));
-        if (!userDoc.exists()) {
-          await signOut(auth);
-          throw new Error('User profile not found');
-        }
+      unsubProfile = onSnapshot(
+        doc(db, 'users', authUser.uid),
+        async (userDoc) => {
+          if (!isMounted) {
+            return;
+          }
 
-        const userData = userDoc.data() as UserProfile;
-        if (userData.status !== 'active') {
-          await signOut(auth);
-          throw new Error('Account is inactive. Please contact an administrator.');
-        }
+          try {
+            if (!userDoc.exists()) {
+              await signOut(auth);
+              throw new Error('User profile not found');
+            }
 
-        setUser(userData);
-        setBootstrapRequired(false);
-        setAuthError(null);
-      } catch (error) {
-        setUser(null);
-        setAuthError(error instanceof Error ? error.message : 'Failed to load user profile');
-      } finally {
+            const userData = userDoc.data() as UserProfile;
+            if (userData.status !== 'active') {
+              await signOut(auth);
+              throw new Error('Account is inactive. Please contact an administrator.');
+            }
+
+            setUser(userData);
+            setBootstrapRequired(false);
+            setAuthError(null);
+          } catch (error) {
+            setUser(null);
+            setAuthError(error instanceof Error ? error.message : 'Failed to load user profile');
+          } finally {
+            setLoading(false);
+          }
+        },
+        (error) => {
+          if (!isMounted) {
+            return;
+          }
+
+          setUser(null);
+          setAuthError(error instanceof Error ? error.message : 'Failed to load user profile');
+          setLoading(false);
+        }
+      );
+
+      if (!unsubProfile) {
         setLoading(false);
       }
     });
 
     return () => {
       isMounted = false;
+      if (unsubProfile) {
+        unsubProfile();
+      }
       unsubAuth();
     };
   }, []);
@@ -320,35 +368,16 @@ export default function App() {
     await signOut(auth);
   };
 
-  const hasPermission = (permissionId: string) => {
-    if (!user) return false;
-    if (user.role === 'superadmin') return true;
-    return user.permissions?.includes(permissionId);
+  const canAccessModule = (moduleId: string) => {
+    const module = APP_MODULES.find((entry) => entry.id === moduleId);
+    return module ? userHasAnyPermission(user, module.permissions) : false;
   };
 
   const getDefaultAuthorizedPath = () => {
     if (!user) return '/login';
     if (user.role === 'superadmin') return '/';
 
-    const routePriority: Array<{ permission: string; path: string }> = [
-      { permission: 'dashboard', path: '/' },
-      { permission: 'pos', path: '/pos' },
-      { permission: 'shifts', path: '/cash-shifts' },
-      { permission: 'credits', path: '/credits' },
-      { permission: 'products', path: '/products' },
-      { permission: 'inventory', path: '/inventory' },
-      { permission: 'branches', path: '/branches' },
-      { permission: 'labels', path: '/labels' },
-      { permission: 'reports', path: '/reports' },
-      { permission: 'expenses', path: '/expenses' },
-      { permission: 'users', path: '/users' },
-      { permission: 'audit-logs', path: '/audit-logs' },
-      { permission: 'settings', path: '/settings' },
-      { permission: 'status', path: '/status' }
-    ];
-
-    const firstAllowed = routePriority.find((route) => hasPermission(route.permission));
-    return firstAllowed?.path ?? null;
+    return APP_MODULES.find((module) => userHasAnyPermission(user, module.permissions))?.path ?? null;
   };
 
   const defaultAuthorizedPath = getDefaultAuthorizedPath();
@@ -398,25 +427,25 @@ export default function App() {
             <Layout>
               {defaultAuthorizedPath ? (
                 <Routes>
-                  <Route path="/" element={hasPermission('dashboard') ? <Dashboard /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/pos" element={hasPermission('pos') ? <POS /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/sales-history" element={hasPermission('pos') ? <SalesHistory /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/cash-shifts" element={hasPermission('shifts') || hasPermission('pos') ? <CashShifts /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/customers" element={hasPermission('pos') ? <Customers /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/credits" element={hasPermission('credits') ? <Credits /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/products" element={hasPermission('products') ? <Products /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/categories" element={hasPermission('products') ? <Categories /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/inventory" element={hasPermission('inventory') ? <Inventory /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/purchase-orders" element={hasPermission('inventory') ? <PurchaseOrders /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/suppliers" element={hasPermission('inventory') ? <Suppliers /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/branches" element={hasPermission('branches') ? <Branches /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/labels" element={hasPermission('labels') ? <Labels /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/users" element={hasPermission('users') ? <Users /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/audit-logs" element={hasPermission('audit-logs') ? <AuditLogs /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/expenses" element={hasPermission('expenses') ? <Expenses /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/reports" element={hasPermission('reports') ? <Reports /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/settings" element={hasPermission('settings') ? <Settings /> : <Navigate to={defaultAuthorizedPath} replace />} />
-                  <Route path="/status" element={hasPermission('status') ? <ReadinessPanel /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/" element={canAccessModule('dashboard') ? <Dashboard /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/pos" element={canAccessModule('pos') ? <POS /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/sales-history" element={canAccessModule('sales-history') ? <SalesHistory /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/cash-shifts" element={canAccessModule('shifts') ? <CashShifts /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/customers" element={canAccessModule('customers') ? <Customers /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/credits" element={canAccessModule('credits') ? <Credits /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/products" element={canAccessModule('products') ? <Products /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/categories" element={canAccessModule('categories') ? <Categories /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/inventory" element={canAccessModule('inventory') ? <Inventory /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/purchase-orders" element={canAccessModule('purchase-orders') ? <PurchaseOrders /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/suppliers" element={canAccessModule('suppliers') ? <Suppliers /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/branches" element={canAccessModule('branches') ? <Branches /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/labels" element={canAccessModule('labels') ? <Labels /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/users" element={canAccessModule('users') ? <Users /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/audit-logs" element={canAccessModule('audit-logs') ? <AuditLogs /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/expenses" element={canAccessModule('expenses') ? <Expenses /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/reports" element={canAccessModule('reports') ? <Reports /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/settings" element={canAccessModule('settings') ? <Settings /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/status" element={canAccessModule('status') ? <ReadinessPanel /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="*" element={<Navigate to={defaultAuthorizedPath} replace />} />
                 </Routes>
               ) : (
