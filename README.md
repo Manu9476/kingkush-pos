@@ -59,6 +59,45 @@ npm run dev:server
 
 This starts the Node runtime on `http://localhost:3000` and serves both the UI and the API routes from the same process.
 
+## Cash Drawer Helper
+
+The web app now supports a local cash-drawer helper for cashier tills.
+
+What it does:
+
+- the browser sends a request to a local helper running on the till PC
+- the helper sends an ESC/POS pulse to a network receipt printer or drawer controller
+- the POS can auto-open the drawer for cash sales or open it manually from the receipt screen
+
+Start the helper on the cashier machine:
+
+```bash
+set DRAWER_PRINTER_HOST=192.168.1.50
+set DRAWER_PRINTER_PORT=9100
+npm run drawer:helper
+```
+
+Optional helper environment variables:
+
+- `DRAWER_HELPER_PORT` defaults to `17363`
+- `DRAWER_PULSE_HEX` defaults to `1B700019FA`
+- `DRAWER_DRY_RUN=true` lets you test the flow without firing the drawer
+- `DRAWER_ALLOW_ORIGIN` controls CORS if you want to lock it down
+
+Then in the app:
+
+1. open `Settings`
+2. enable `Cash Drawer Helper`
+3. keep the helper URL at `http://127.0.0.1:17363` unless you changed the port
+4. click `Test Drawer`
+5. optionally enable `Auto-open for cash sales`
+
+Important:
+
+- the included helper is designed for network-connected ESC/POS printers or drawer controllers
+- if your drawer is attached through a USB-only printer, you may need a vendor-specific local bridge instead of the default helper
+- run the helper only on cashier machines that should control a physical drawer
+
 ## Production Build
 
 ```bash
@@ -119,6 +158,7 @@ The `vercel.json` rewrite configuration keeps SPA routes working while preservin
 - `npm run build` - production frontend build
 - `npm run preview` - preview the production frontend build
 - `npm run start` - serve the production app through `server.ts`
+- `npm run drawer:helper` - local cash-drawer helper for cashier machines
 - `npm run lint` - TypeScript validation
 - `npm run test` - node test suite for auth and security helpers
 

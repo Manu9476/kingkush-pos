@@ -19,6 +19,7 @@ import { useAuth } from '../App';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 
+import { isCashDrawerEnabled, saleUsesCashDrawer, triggerCashDrawer } from '../services/cashDrawer';
 import { createSale, getShiftStatus } from '../services/platformApi';
 
 export default function POS() {
@@ -71,6 +72,7 @@ export default function POS() {
   const quickSearchRef = useRef<HTMLDivElement>(null);
   const customerSearchRef = useRef<HTMLDivElement>(null);
   const customerInputRef = useRef<HTMLInputElement>(null);
+  const lastDrawerTriggerSaleId = useRef<string | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -433,6 +435,62 @@ export default function POS() {
 
     return () => window.clearTimeout(timeoutId);
   }, [showReceipt, lastSale, settings?.receiptAutoPrint]);
+
+  useEffect(() => {
+    if (
+      !showReceipt ||
+      !lastSale ||
+      !settings ||
+      !settings.drawerEnabled ||
+      !settings.drawerAutoOpenOnCashSale ||
+      !saleUsesCashDrawer(lastSale)
+    ) {
+      return;
+    }
+
+    if (lastDrawerTriggerSaleId.current === lastSale.id) {
+      return;
+    }
+
+    lastDrawerTriggerSaleId.current = lastSale.id;
+
+    void triggerCashDrawer(settings, {
+      eventType: 'sale',
+      saleId: lastSale.id,
+      amount: lastSale.amountPaid,
+      paymentMethod: lastSale.tenderMethod || lastSale.paymentMethod,
+      reference: lastSale.reference,
+      suppressFailureToast: false
+    }).catch(() => {
+      // The helper service already reports a user-facing error message.
+    });
+  }, [
+    showReceipt,
+    lastSale,
+    settings,
+    settings?.drawerEnabled,
+    settings?.drawerAutoOpenOnCashSale,
+    settings?.drawerHelperUrl
+  ]);
+
+  const handleManualDrawerOpen = async () => {
+    if (!settings) {
+      return;
+    }
+
+    try {
+      await triggerCashDrawer(settings, {
+        eventType: 'manual',
+        saleId: lastSale?.id,
+        amount: lastSale?.amountPaid,
+        paymentMethod: lastSale ? (lastSale.tenderMethod || lastSale.paymentMethod) : paymentMethod,
+        reference: lastSale?.reference || reference,
+        announceSuccess: true
+      });
+    } catch {
+      // The helper service already reports a user-facing error message.
+    }
+  };
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
@@ -976,6 +1034,14 @@ export default function POS() {
               </div>
 
               <div className="flex flex-col gap-3 pt-4">
+                {isCashDrawerEnabled(settings) && (
+                  <button
+                    onClick={() => void handleManualDrawerOpen()}
+                    className="w-full py-3 border border-indigo-200 rounded-xl font-bold text-indigo-700 hover:bg-indigo-50 transition-all"
+                  >
+                    Open Cash Drawer
+                  </button>
+                )}
                 <button 
                   onClick={() => window.print()}
                   className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all"

@@ -11,6 +11,9 @@ export interface SystemSettings {
   receiptHeader?: string;
   receiptFooter?: string;
   receiptAutoPrint?: boolean;
+  drawerEnabled?: boolean;
+  drawerAutoOpenOnCashSale?: boolean;
+  drawerHelperUrl?: string;
   barcodeAutofocus?: boolean;
   barcodeSubmitDelayMs?: number;
   defaultBranchId?: string;

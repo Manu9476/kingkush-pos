@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 
 import { recordAuditLog } from '../services/auditService';
+import { testCashDrawer } from '../services/cashDrawer';
 import { changePassword } from '../services/platformApi';
 
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -42,6 +43,9 @@ const DEFAULT_SETTINGS: SystemSettings = {
   receiptHeader: 'Thank you for shopping with us!',
   receiptFooter: 'Goods once sold are not returnable.',
   receiptAutoPrint: false,
+  drawerEnabled: false,
+  drawerAutoOpenOnCashSale: false,
+  drawerHelperUrl: 'http://127.0.0.1:17363',
   barcodeAutofocus: true,
   barcodeSubmitDelayMs: 120,
   defaultBranchId: 'branch_main',
@@ -54,6 +58,7 @@ export default function Settings() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isTestingDrawer, setIsTestingDrawer] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -91,6 +96,9 @@ export default function Settings() {
             taxRate: data.taxRate ?? 16,
             loyaltyPointRate: data.loyaltyPointRate ?? 100,
             receiptAutoPrint: data.receiptAutoPrint ?? false,
+            drawerEnabled: data.drawerEnabled ?? false,
+            drawerAutoOpenOnCashSale: data.drawerAutoOpenOnCashSale ?? false,
+            drawerHelperUrl: data.drawerHelperUrl || DEFAULT_SETTINGS.drawerHelperUrl,
             barcodeAutofocus: data.barcodeAutofocus ?? true,
             barcodeSubmitDelayMs: data.barcodeSubmitDelayMs ?? 120
           });
@@ -120,6 +128,9 @@ export default function Settings() {
         storeEmail: (settings.storeEmail || '').trim(),
         receiptHeader: (settings.receiptHeader || '').trim() || DEFAULT_SETTINGS.receiptHeader,
         receiptFooter: (settings.receiptFooter || '').trim() || DEFAULT_SETTINGS.receiptFooter,
+        drawerEnabled: Boolean(settings.drawerEnabled),
+        drawerAutoOpenOnCashSale: Boolean(settings.drawerAutoOpenOnCashSale),
+        drawerHelperUrl: (settings.drawerHelperUrl || DEFAULT_SETTINGS.drawerHelperUrl || '').trim() || DEFAULT_SETTINGS.drawerHelperUrl,
         barcodeSubmitDelayMs: Math.max(60, Number(settings.barcodeSubmitDelayMs || 120)),
         updatedAt: new Date().toISOString()
       };
@@ -129,7 +140,7 @@ export default function Settings() {
         user!.uid,
         user!.displayName || user!.username,
         'UPDATE_SETTINGS',
-        'Updated store profile, scanner behavior, receipt settings, and business rules'
+        'Updated store profile, scanner behavior, receipt settings, cash drawer integration, and business rules'
       );
       setSettings(updatedSettings);
       setShowSuccess(true);
@@ -182,11 +193,36 @@ export default function Settings() {
     }
   };
 
+  const handleDrawerTest = async () => {
+    if (!settings.drawerEnabled) {
+      return;
+    }
+
+    setIsTestingDrawer(true);
+    try {
+      await testCashDrawer(settings);
+      try {
+        await recordAuditLog(
+          user!.uid,
+          user!.displayName || user!.username,
+          'TEST_CASH_DRAWER',
+          `Sent cash drawer test trigger to ${settings.drawerHelperUrl || DEFAULT_SETTINGS.drawerHelperUrl}`
+        );
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Drawer test audit log failed', error);
+        }
+      }
+    } finally {
+      setIsTestingDrawer(false);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500">Manage account security, branch defaults, receipt identity, and scanner behavior.</p>
+        <p className="text-sm text-gray-500">Manage account security, branch defaults, receipt identity, scanner behavior, and cash drawer integration.</p>
       </div>
 
       <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
@@ -363,6 +399,67 @@ export default function Settings() {
                 className="h-5 w-5 accent-indigo-600"
               />
             </label>
+          </section>
+
+          <section className="space-y-6">
+            <div className="flex items-center gap-3 pb-4 border-b border-gray-50">
+              <Printer className="w-5 h-5 text-indigo-600" />
+              <h2 className="text-xl font-bold text-gray-900">Cash Drawer Integration</h2>
+            </div>
+
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-sm text-indigo-800">
+              Use this with the local cashier helper running on the till PC. The helper receives a request from the browser and sends the ESC/POS drawer pulse to your network printer or drawer controller.
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <label className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                <div>
+                  <p className="text-sm font-bold text-gray-900">Enable cash drawer helper</p>
+                  <p className="text-xs text-gray-500">Turn this on only on tills that have the local helper installed.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.drawerEnabled ?? false}
+                  onChange={(event) => setSettings({ ...settings, drawerEnabled: event.target.checked })}
+                  className="h-5 w-5 accent-indigo-600"
+                />
+              </label>
+
+              <label className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                <div>
+                  <p className="text-sm font-bold text-gray-900">Auto-open for cash sales</p>
+                  <p className="text-xs text-gray-500">Opens the drawer after sales that include a cash tender.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.drawerAutoOpenOnCashSale ?? false}
+                  onChange={(event) => setSettings({ ...settings, drawerAutoOpenOnCashSale: event.target.checked })}
+                  className="h-5 w-5 accent-indigo-600"
+                  disabled={!settings.drawerEnabled}
+                />
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
+              <LabeledField label="Local Helper URL">
+                <input
+                  type="text"
+                  value={settings.drawerHelperUrl || ''}
+                  onChange={(event) => setSettings({ ...settings, drawerHelperUrl: event.target.value })}
+                  placeholder={DEFAULT_SETTINGS.drawerHelperUrl}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </LabeledField>
+
+              <button
+                type="button"
+                onClick={() => void handleDrawerTest()}
+                disabled={!settings.drawerEnabled || isTestingDrawer}
+                className="px-6 py-4 rounded-2xl border border-indigo-200 bg-white text-indigo-700 font-bold transition-all hover:bg-indigo-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+              >
+                {isTestingDrawer ? 'Testing...' : 'Test Drawer'}
+              </button>
+            </div>
           </section>
 
           <section className="space-y-6">
