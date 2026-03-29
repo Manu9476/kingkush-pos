@@ -13,12 +13,15 @@ import {
 import type { Branch, CashMovement, CashShift } from '../types';
 import {
   closeShift,
+  getShiftReport,
   getShiftStatus,
   openShift,
   recordCashMovement
 } from '../services/platformApi';
-import { Banknote, Clock3, LockOpen, Lock, ArrowDownUp, ShieldCheck } from 'lucide-react';
+import { Banknote, Clock3, LockOpen, Lock, ArrowDownUp, ShieldCheck, Printer } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../App';
+import { formatShiftReportNumber } from '../utils/receipts';
 
 type LiveShiftSummary = {
   shiftId: string;
@@ -33,6 +36,50 @@ type LiveShiftSummary = {
   variance: number | null;
 } | null;
 
+type ShiftReport = {
+  generatedAt: string;
+  shift: CashShift & {
+    branchName?: string;
+  };
+  summary: NonNullable<LiveShiftSummary>;
+  totals: {
+    saleCount: number;
+    creditSaleCount: number;
+    refundedSaleCount: number;
+    totalSales: number;
+    totalCollected: number;
+    totalOutstanding: number;
+    totalRefundAmount: number;
+    creditPaymentCount: number;
+    totalCreditPayments: number;
+  };
+  movements: CashMovement[];
+  sales: Array<{
+    id: string;
+    totalAmount: number;
+    amountPaid: number;
+    collectedAmount: number;
+    outstandingBalance: number;
+    paymentMethod: string;
+    tenderMethod?: string | null;
+    customerName?: string | null;
+    isCredit: boolean;
+    isRefunded: boolean;
+    refundAmount: number;
+    soldAt: string;
+  }>;
+  creditPayments: Array<{
+    id: string;
+    saleId: string;
+    amountPaid: number;
+    remainingBalance: number;
+    paymentMethod: string;
+    reference?: string | null;
+    cashierName: string;
+    paidAt: string;
+  }>;
+};
+
 const CASH_MOVEMENT_TYPES = [
   { id: 'cash-in', label: 'Cash In' },
   { id: 'cash-out', label: 'Cash Out' },
@@ -41,11 +88,14 @@ const CASH_MOVEMENT_TYPES = [
 ] as const;
 
 export default function CashShifts() {
+  const { user } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [recentShifts, setRecentShifts] = useState<CashShift[]>([]);
   const [currentShift, setCurrentShift] = useState<CashShift | null>(null);
   const [liveSummary, setLiveSummary] = useState<LiveShiftSummary>(null);
   const [movements, setMovements] = useState<CashMovement[]>([]);
+  const [selectedReport, setSelectedReport] = useState<ShiftReport | null>(null);
+  const [isLoadingReport, setIsLoadingReport] = useState(false);
 
   const [openForm, setOpenForm] = useState({
     openingFloat: '0',
@@ -66,6 +116,11 @@ export default function CashShifts() {
   const [isOpening, setIsOpening] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isRecordingMovement, setIsRecordingMovement] = useState(false);
+  const canGenerateReports = Boolean(
+    user?.role === 'superadmin' ||
+    user?.role === 'admin' ||
+    user?.permissions?.includes('reports')
+  );
 
   const refreshShiftStatus = async () => {
     try {
@@ -140,6 +195,23 @@ export default function CashShifts() {
     }
     return branches.find((branch) => branch.id === currentShift.branchId)?.name || currentShift.branchId;
   }, [branches, currentShift?.branchId]);
+
+  const handleLoadReport = async (shiftId: string, printAfterLoad = false) => {
+    setIsLoadingReport(true);
+    try {
+      const report = await getShiftReport(shiftId);
+      setSelectedReport(report as ShiftReport);
+      if (printAfterLoad) {
+        window.setTimeout(() => {
+          window.print();
+        }, 250);
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Unable to load shift report');
+    } finally {
+      setIsLoadingReport(false);
+    }
+  };
 
   const handleOpenShift = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -279,8 +351,21 @@ export default function CashShifts() {
                   {currentBranchName} • Opened {toDate(currentShift.openedAt).toLocaleString()}
                 </p>
               </div>
-              <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                Shift #{currentShift.id.slice(-8).toUpperCase()}
+              <div className="flex flex-col items-start gap-3 md:items-end">
+                <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                  Shift #{currentShift.id.slice(-8).toUpperCase()}
+                </div>
+                {canGenerateReports && (
+                  <button
+                    type="button"
+                    onClick={() => void handleLoadReport(currentShift.id, true)}
+                    disabled={isLoadingReport}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 px-4 py-2 text-sm font-bold text-indigo-700 transition-all hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Printer className="h-4 w-4" />
+                    {isLoadingReport ? 'Preparing report...' : 'Print Shift Report'}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -474,6 +559,9 @@ export default function CashShifts() {
                 <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Counted</th>
                 <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Variance</th>
                 <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Status</th>
+                {canGenerateReports && (
+                  <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Report</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -503,13 +591,26 @@ export default function CashShifts() {
                         {shift.status}
                       </span>
                     </td>
+                    {canGenerateReports && (
+                      <td className="px-8 py-5">
+                        <button
+                          type="button"
+                          onClick={() => void handleLoadReport(shift.id, true)}
+                          disabled={isLoadingReport}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 px-3 py-2 text-xs font-bold text-indigo-700 transition-all hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Printer className="h-4 w-4" />
+                          Print
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
 
               {recentShifts.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-8 py-14 text-center text-sm text-gray-400">
+                  <td colSpan={canGenerateReports ? 8 : 7} className="px-8 py-14 text-center text-sm text-gray-400">
                     No shift history yet.
                   </td>
                 </tr>
@@ -518,6 +619,210 @@ export default function CashShifts() {
           </table>
         </div>
       </div>
+
+      {selectedReport && (
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-8 py-6 border-b border-gray-50 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Shift Report Preview</h2>
+              <p className="text-sm text-gray-500">
+                {selectedReport.shift.branchName || 'Unassigned branch'} • {selectedReport.shift.userName} • {formatShiftReportNumber(selectedReport.shift.id)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition-all hover:bg-indigo-700"
+            >
+              <Printer className="h-4 w-4" />
+              Print Report
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-8 p-8 xl:grid-cols-[0.95fr_1.05fr]">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <MetricCard label="Sales Count" value={selectedReport.totals.saleCount} tone="indigo" showCurrency={false} />
+                <MetricCard label="Credit Sales" value={selectedReport.totals.creditSaleCount} tone="amber" showCurrency={false} />
+                <MetricCard label="Refunded Sales" value={selectedReport.totals.refundedSaleCount} tone="rose" showCurrency={false} />
+                <MetricCard label="Credit Payments" value={selectedReport.totals.creditPaymentCount} tone="blue" showCurrency={false} />
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <SummaryBlock label="Total Sales" value={selectedReport.totals.totalSales} />
+                <SummaryBlock label="Collected During Shift" value={selectedReport.totals.totalCollected} />
+                <SummaryBlock label="Outstanding Credit" value={selectedReport.totals.totalOutstanding} />
+                <SummaryBlock label="Refund Amount" value={selectedReport.totals.totalRefundAmount} tone="rose" />
+              </div>
+              <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-500">Reconciliation</p>
+                <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-500">Opening Float</p>
+                    <p className="text-lg font-black text-gray-900">KES {selectedReport.summary.openingFloat.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Expected Cash</p>
+                    <p className="text-lg font-black text-gray-900">KES {selectedReport.summary.expectedCash.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Counted Cash</p>
+                    <p className="text-lg font-black text-gray-900">
+                      {selectedReport.summary.countedCash === null ? 'Open Shift' : `KES ${selectedReport.summary.countedCash.toLocaleString()}`}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Variance</p>
+                    <p className={`text-lg font-black ${(selectedReport.summary.variance || 0) < 0 ? 'text-red-600' : (selectedReport.summary.variance || 0) > 0 ? 'text-blue-600' : 'text-emerald-600'}`}>
+                      {selectedReport.summary.variance === null ? 'Pending' : `KES ${selectedReport.summary.variance.toLocaleString()}`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="rounded-3xl border border-gray-100">
+                <div className="border-b border-gray-100 px-5 py-4">
+                  <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-gray-500">Cash Movements</h3>
+                </div>
+                <div className="max-h-[260px] space-y-3 overflow-y-auto px-5 py-4">
+                  {selectedReport.movements.length === 0 ? (
+                    <p className="text-sm text-gray-400">No cash movements recorded for this shift.</p>
+                  ) : (
+                    selectedReport.movements.map((movement) => (
+                      <div key={movement.id} className="rounded-2xl bg-gray-50 px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-bold text-gray-900">{movement.reason}</p>
+                            <p className="text-xs text-gray-500">{movement.type} • {toDate(movement.timestamp).toLocaleString()}</p>
+                          </div>
+                          <p className="text-sm font-black text-gray-900">KES {movement.amount.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-gray-100">
+                <div className="border-b border-gray-100 px-5 py-4">
+                  <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-gray-500">Shift Sales & Credit Activity</h3>
+                </div>
+                <div className="max-h-[260px] space-y-3 overflow-y-auto px-5 py-4">
+                  {selectedReport.sales.length === 0 && selectedReport.creditPayments.length === 0 ? (
+                    <p className="text-sm text-gray-400">No sale or credit activity recorded for this shift.</p>
+                  ) : (
+                    <>
+                      {selectedReport.sales.map((sale) => (
+                        <div key={sale.id} className="rounded-2xl bg-gray-50 px-4 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-bold text-gray-900">Sale #{sale.id.slice(-8).toUpperCase()}</p>
+                              <p className="text-xs text-gray-500">
+                                {sale.customerName || 'Walk-in Customer'} • {(sale.tenderMethod || sale.paymentMethod).toUpperCase()} • {toDate(sale.soldAt).toLocaleString()}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-black text-gray-900">KES {sale.totalAmount.toLocaleString()}</p>
+                              {(sale.outstandingBalance || 0) > 0 && (
+                                <p className="text-xs font-bold text-amber-600">Credit KES {sale.outstandingBalance.toLocaleString()}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {selectedReport.creditPayments.map((payment) => (
+                        <div key={payment.id} className="rounded-2xl bg-blue-50 px-4 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-bold text-blue-900">Credit payment #{payment.id.slice(-8).toUpperCase()}</p>
+                              <p className="text-xs text-blue-700">
+                                {payment.paymentMethod.toUpperCase()} • {toDate(payment.paidAt).toLocaleString()}
+                              </p>
+                            </div>
+                            <p className="text-sm font-black text-blue-900">KES {payment.amountPaid.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedReport && (
+        <div id="cash-shift-receipt" className="hidden print:block font-mono text-[12px] leading-tight p-4 w-[80mm]">
+          <div className="text-center mb-4">
+            <h1 className="font-bold text-lg uppercase">KingKush Sale</h1>
+            <p className="text-sm font-bold">CASH SHIFT REPORT</p>
+            <p>{selectedReport.shift.branchName || 'Unassigned branch'}</p>
+            <p className="mt-1">Report #: {formatShiftReportNumber(selectedReport.shift.id)}</p>
+            <p className="mt-2">********************************</p>
+          </div>
+
+          <div className="mb-3 space-y-1">
+            <p>SHIFT: {selectedReport.shift.id.toUpperCase()}</p>
+            <p>CASHIER: {selectedReport.shift.userName.toUpperCase()}</p>
+            <p>OPENED: {toDate(selectedReport.shift.openedAt).toLocaleString()}</p>
+            {selectedReport.shift.closedAt && <p>CLOSED: {toDate(selectedReport.shift.closedAt).toLocaleString()}</p>}
+            <p>GENERATED: {toDate(selectedReport.generatedAt).toLocaleString()}</p>
+            <p>********************************</p>
+          </div>
+
+          <div className="mb-4 space-y-1">
+            <div className="flex justify-between"><span>OPENING FLOAT</span><span>KES {selectedReport.summary.openingFloat.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span>CASH SALES</span><span>KES {selectedReport.summary.cashSales.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span>CREDIT CASH-IN</span><span>KES {selectedReport.summary.cashCreditPayments.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span>MANUAL IN</span><span>KES {selectedReport.summary.manualCashIn.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span>MANUAL OUT</span><span>KES {selectedReport.summary.manualCashOut.toLocaleString()}</span></div>
+            <div className="flex justify-between font-bold"><span>EXPECTED CASH</span><span>KES {selectedReport.summary.expectedCash.toLocaleString()}</span></div>
+            {selectedReport.summary.countedCash !== null && (
+              <>
+                <div className="flex justify-between"><span>COUNTED CASH</span><span>KES {selectedReport.summary.countedCash.toLocaleString()}</span></div>
+                <div className="flex justify-between font-bold"><span>VARIANCE</span><span>KES {(selectedReport.summary.variance || 0).toLocaleString()}</span></div>
+              </>
+            )}
+            <p>********************************</p>
+          </div>
+
+          <div className="mb-4">
+            <p className="font-bold mb-1">ACTIVITY TOTALS</p>
+            <div className="flex justify-between"><span>SALES COUNT</span><span>{selectedReport.totals.saleCount}</span></div>
+            <div className="flex justify-between"><span>CREDIT SALES</span><span>{selectedReport.totals.creditSaleCount}</span></div>
+            <div className="flex justify-between"><span>REFUNDS</span><span>{selectedReport.totals.refundedSaleCount}</span></div>
+            <div className="flex justify-between"><span>TOTAL SALES</span><span>KES {selectedReport.totals.totalSales.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span>COLLECTED</span><span>KES {selectedReport.totals.totalCollected.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span>OUTSTANDING</span><span>KES {selectedReport.totals.totalOutstanding.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span>REFUND VALUE</span><span>KES {selectedReport.totals.totalRefundAmount.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span>CREDIT PAYMENTS</span><span>KES {selectedReport.totals.totalCreditPayments.toLocaleString()}</span></div>
+            <p>********************************</p>
+          </div>
+
+          {selectedReport.movements.length > 0 && (
+            <div className="mb-4">
+              <p className="font-bold mb-1">CASH MOVEMENTS</p>
+              {selectedReport.movements.map((movement) => (
+                <div key={movement.id} className="mb-1">
+                  <div className="flex justify-between">
+                    <span>{movement.type.toUpperCase()}</span>
+                    <span>KES {movement.amount.toLocaleString()}</span>
+                  </div>
+                  <p className="text-[10px]">{movement.reason}</p>
+                </div>
+              ))}
+              <p>********************************</p>
+            </div>
+          )}
+
+          <div className="text-center">
+            <p className="font-bold mb-1 uppercase">Shift report generated successfully</p>
+            <p>Prepared for reconciliation and audit review.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -525,11 +830,13 @@ export default function CashShifts() {
 function MetricCard({
   label,
   value,
-  tone
+  tone,
+  showCurrency = true
 }: {
   label: string;
   value: number;
   tone: 'indigo' | 'emerald' | 'blue' | 'amber' | 'rose';
+  showCurrency?: boolean;
 }) {
   const toneMap = {
     indigo: 'bg-indigo-50 text-indigo-700',
@@ -542,7 +849,24 @@ function MetricCard({
   return (
     <div className={`rounded-3xl border border-white/70 px-5 py-4 ${toneMap[tone]}`}>
       <p className="text-xs font-bold uppercase tracking-[0.22em]">{label}</p>
-      <p className="mt-3 text-2xl font-black">KES {value.toLocaleString()}</p>
+      <p className="mt-3 text-2xl font-black">{showCurrency ? `KES ${value.toLocaleString()}` : value.toLocaleString()}</p>
+    </div>
+  );
+}
+
+function SummaryBlock({
+  label,
+  value,
+  tone = 'gray'
+}: {
+  label: string;
+  value: number;
+  tone?: 'gray' | 'rose';
+}) {
+  return (
+    <div className={`rounded-3xl border px-5 py-4 ${tone === 'rose' ? 'border-rose-100 bg-rose-50' : 'border-gray-100 bg-gray-50'}`}>
+      <p className={`text-xs font-bold uppercase tracking-[0.22em] ${tone === 'rose' ? 'text-rose-600' : 'text-gray-500'}`}>{label}</p>
+      <p className={`mt-3 text-2xl font-black ${tone === 'rose' ? 'text-rose-700' : 'text-gray-900'}`}>KES {value.toLocaleString()}</p>
     </div>
   );
 }

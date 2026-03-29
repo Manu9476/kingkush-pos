@@ -35,9 +35,13 @@ export default async function handler(req: any, res: any) {
     }>(req);
 
     const items = Array.isArray(body.items) ? body.items : [];
-    const paymentMethod = body.paymentMethod || 'cash';
-    const tenderMethod = body.tenderMethod || paymentMethod;
+    const requestedPaymentMethod = body.paymentMethod || 'cash';
     const amountPaid = Number(body.amountPaid ?? 0);
+    const requestedTenderMethod =
+      body.tenderMethod ||
+      (requestedPaymentMethod === 'credit'
+        ? (amountPaid > 0 ? 'cash' : 'credit')
+        : requestedPaymentMethod);
     const customerId = body.customerId || null;
     const customerName = (body.customerName || '').trim() || null;
     const reference = (body.reference || '').trim() || null;
@@ -49,16 +53,17 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'Each sale item must include a valid product, quantity, and price' });
     }
 
+    if (!Number.isFinite(amountPaid) || amountPaid < 0) {
+      return res.status(400).json({ error: 'Amount paid must be a valid positive number' });
+    }
+
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.sellingPrice, 0);
-    const isCredit = paymentMethod === 'credit' || amountPaid < subtotal;
-    if (isCredit && !['superadmin', 'admin'].includes(user.role)) {
-      return res.status(403).json({ error: 'Only administrators can process credit or partial-payment sales' });
-    }
-    if (paymentMethod === 'credit' && !customerName) {
-      return res.status(400).json({ error: 'Customer name is required for credit sales' });
-    }
-    if (paymentMethod === 'cash' && amountPaid < subtotal) {
-      return res.status(400).json({ error: 'Insufficient payment for a cash sale' });
+    const outstandingBalance = Math.max(0, subtotal - amountPaid);
+    const isCredit = outstandingBalance > 0;
+    const tenderMethod = requestedTenderMethod;
+    const paymentMethod = isCredit ? 'credit' : tenderMethod;
+    if (isCredit && !customerId && !customerName) {
+      return res.status(400).json({ error: 'Select or enter a customer before saving a credit balance' });
     }
 
     const result = await withTransaction(async (client) => {
@@ -102,21 +107,48 @@ export default async function handler(req: any, res: any) {
         }
       }
 
+      let saleCustomerId = customerId;
+      let saleCustomerName = customerName;
       let customerBalance = 0;
-      if (customerId) {
-        const customerResult = await client.query<{ total_balance: string }>(
-          'SELECT total_balance FROM customers WHERE id = $1 FOR UPDATE',
-          [customerId]
+      if (saleCustomerId) {
+        const customerResult = await client.query<{ id: string; name: string; total_balance: string }>(
+          'SELECT id, name, total_balance FROM customers WHERE id = $1 FOR UPDATE',
+          [saleCustomerId]
         );
-        if (customerResult.rows[0]) {
-          customerBalance = Number(customerResult.rows[0].total_balance ?? 0);
+        const existingCustomer = customerResult.rows[0];
+        if (!existingCustomer) {
+          throw new Error('Selected customer was not found');
         }
+        customerBalance = Number(existingCustomer.total_balance ?? 0);
+        if (!saleCustomerName) {
+          saleCustomerName = existingCustomer.name;
+        }
+      } else if (isCredit && saleCustomerName) {
+        saleCustomerId = createId('cust');
+        await client.query(
+          `
+          INSERT INTO customers (
+            id,
+            customer_code,
+            name,
+            loyalty_points,
+            total_balance,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, 0, 0, NOW(), NOW())
+          `,
+          [
+            saleCustomerId,
+            `CUST-${saleCustomerId.slice(-6).toUpperCase()}`,
+            saleCustomerName
+          ]
+        );
       }
 
       const saleId = createId('sale');
       const soldAt = new Date().toISOString();
-      const outstandingBalance = isCredit ? Math.max(0, subtotal - amountPaid) : 0;
-      let excessToApply = !isCredit && customerId && amountPaid > subtotal ? amountPaid - subtotal : 0;
+      let excessToApply = !isCredit && saleCustomerId && amountPaid > subtotal ? amountPaid - subtotal : 0;
       let appliedToCredits = 0;
       const taxAmount = Number(((subtotal * taxRate) / 100).toFixed(2));
 
@@ -154,8 +186,8 @@ export default async function handler(req: any, res: any) {
           paymentMethod,
           tenderMethod,
           amountPaid,
-          customerName,
-          customerId,
+          saleCustomerName,
+          saleCustomerId,
           reference,
           isCredit,
           outstandingBalance,
@@ -239,7 +271,7 @@ export default async function handler(req: any, res: any) {
         );
       }
 
-      if (customerId && loyaltyPointRate > 0) {
+      if (saleCustomerId && loyaltyPointRate > 0) {
         const pointsEarned = Math.floor(subtotal / loyaltyPointRate);
         if (pointsEarned > 0) {
           await client.query(
@@ -248,7 +280,7 @@ export default async function handler(req: any, res: any) {
             SET loyalty_points = loyalty_points + $2, updated_at = NOW()
             WHERE id = $1
             `,
-            [customerId, pointsEarned]
+            [saleCustomerId, pointsEarned]
           );
         }
       }
@@ -274,8 +306,8 @@ export default async function handler(req: any, res: any) {
           [
             createId('cred'),
             saleId,
-            customerId,
-            customerName || 'Walk-in Customer',
+            saleCustomerId,
+            saleCustomerName || 'Walk-in Customer',
             subtotal,
             amountPaid,
             outstandingBalance,
@@ -284,20 +316,20 @@ export default async function handler(req: any, res: any) {
           ]
         );
 
-        if (customerId) {
+        if (saleCustomerId) {
           await client.query(
             `
             UPDATE customers
             SET total_balance = total_balance + $2, updated_at = NOW()
             WHERE id = $1
             `,
-            [customerId, outstandingBalance]
+            [saleCustomerId, outstandingBalance]
           );
           customerBalance += outstandingBalance;
         }
       }
 
-      if (excessToApply > 0 && customerId) {
+      if (excessToApply > 0 && saleCustomerId) {
         const creditRows = await client.query<{
           id: string;
           sale_id: string;
@@ -310,7 +342,7 @@ export default async function handler(req: any, res: any) {
           ORDER BY created_at ASC
           FOR UPDATE
           `,
-          [customerId]
+          [saleCustomerId]
         );
 
         for (const credit of creditRows.rows) {
@@ -393,7 +425,7 @@ export default async function handler(req: any, res: any) {
             SET total_balance = GREATEST(total_balance - $2, 0), updated_at = NOW()
             WHERE id = $1
             `,
-            [customerId, appliedToCredits]
+            [saleCustomerId, appliedToCredits]
           );
           customerBalance = Math.max(0, customerBalance - appliedToCredits);
         }
@@ -419,8 +451,8 @@ export default async function handler(req: any, res: any) {
           paymentMethod,
           amountPaid,
           balance: change,
-          customerName,
-          customerId,
+          customerName: saleCustomerName,
+          customerId: saleCustomerId,
           reference,
           isCredit,
           outstandingBalance,
@@ -437,12 +469,15 @@ export default async function handler(req: any, res: any) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown server error';
     const statusCode =
-      message.includes('Insufficient stock') || message.includes('required') || message.includes('At least one')
+      message.includes('Insufficient stock') ||
+      message.includes('required') ||
+      message.includes('At least one') ||
+      message.includes('valid positive number') ||
+      message.includes('customer') ||
+      message.includes('not found')
         ? 400
         : message.includes('open cashier shift')
           ? 409
-        : message.includes('administrators')
-          ? 403
           : 500;
     return res.status(statusCode).json({ error: message });
   }

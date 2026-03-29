@@ -17,6 +17,224 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'GET') {
+      const requestedShiftId = readQueryValue(req.query?.shiftId);
+      if (requestedShiftId) {
+        const report = await withTransaction(async (client) => {
+          const shiftResult = await client.query<{
+            id: string;
+            user_id: string;
+            user_name: string;
+            branch_id: string | null;
+            branch_name: string | null;
+            opening_float: string;
+            status: 'open' | 'closed';
+            notes: string | null;
+            opening_reference: string | null;
+            closing_notes: string | null;
+            closing_counted_cash: string | null;
+            expected_cash: string | null;
+            variance: string | null;
+            closed_by_id: string | null;
+            closed_by_name: string | null;
+            opened_at: string;
+            closed_at: string | null;
+            updated_at: string;
+          }>(
+            `
+            SELECT
+              s.id,
+              s.user_id,
+              s.user_name,
+              s.branch_id,
+              b.name AS branch_name,
+              s.opening_float,
+              s.status,
+              s.notes,
+              s.opening_reference,
+              s.closing_notes,
+              s.closing_counted_cash,
+              s.expected_cash,
+              s.variance,
+              s.closed_by_id,
+              s.closed_by_name,
+              s.opened_at,
+              s.closed_at,
+              s.updated_at
+            FROM cash_shifts s
+            LEFT JOIN branches b ON b.id = s.branch_id
+            WHERE s.id = $1
+            LIMIT 1
+            `,
+            [requestedShiftId]
+          );
+          const shift = shiftResult.rows[0];
+          if (!shift) {
+            throw new Error('Shift not found');
+          }
+
+          const canViewReport =
+            user.role === 'superadmin' ||
+            user.role === 'admin' ||
+            user.permissions.includes('reports') ||
+            shift.user_id === user.uid;
+          if (!canViewReport) {
+            throw new Error('Permission denied');
+          }
+
+          const summary = await calculateShiftSummary(client, shift.id);
+          const movementsResult = await client.query<{
+            id: string;
+            shift_id: string;
+            branch_id: string | null;
+            user_id: string | null;
+            user_name: string;
+            type: string;
+            amount: string;
+            reason: string;
+            reference: string | null;
+            created_at: string;
+          }>(
+            `
+            SELECT id, shift_id, branch_id, user_id, user_name, type, amount, reason, reference, created_at
+            FROM cash_movements
+            WHERE shift_id = $1
+            ORDER BY created_at ASC
+            `,
+            [shift.id]
+          );
+          const salesResult = await client.query<{
+            id: string;
+            total_amount: string;
+            amount_paid: string;
+            balance: string;
+            outstanding_balance: string;
+            payment_method: string;
+            tender_method: string | null;
+            customer_name: string | null;
+            is_credit: boolean;
+            is_refunded: boolean;
+            refund_amount: string;
+            sold_at: string;
+          }>(
+            `
+            SELECT
+              id,
+              total_amount,
+              amount_paid,
+              balance,
+              outstanding_balance,
+              payment_method,
+              tender_method,
+              customer_name,
+              is_credit,
+              is_refunded,
+              refund_amount,
+              sold_at
+            FROM sales
+            WHERE shift_id = $1
+            ORDER BY sold_at ASC
+            `,
+            [shift.id]
+          );
+          const creditPaymentsResult = await client.query<{
+            id: string;
+            sale_id: string;
+            amount_paid: string;
+            remaining_balance: string;
+            payment_method: string;
+            reference: string | null;
+            cashier_name: string;
+            paid_at: string;
+          }>(
+            `
+            SELECT id, sale_id, amount_paid, remaining_balance, payment_method, reference, cashier_name, paid_at
+            FROM credit_payments
+            WHERE shift_id = $1
+            ORDER BY paid_at ASC
+            `,
+            [shift.id]
+          );
+
+          const sales = salesResult.rows.map((row) => ({
+            id: row.id,
+            totalAmount: Number(row.total_amount ?? 0),
+            amountPaid: Number(row.amount_paid ?? 0),
+            collectedAmount: Math.max(0, Number(row.amount_paid ?? 0) - Number(row.balance ?? 0)),
+            outstandingBalance: Number(row.outstanding_balance ?? 0),
+            paymentMethod: row.payment_method,
+            tenderMethod: row.tender_method,
+            customerName: row.customer_name,
+            isCredit: Boolean(row.is_credit),
+            isRefunded: Boolean(row.is_refunded),
+            refundAmount: Number(row.refund_amount ?? 0),
+            soldAt: row.sold_at
+          }));
+          const creditPayments = creditPaymentsResult.rows.map((row) => ({
+            id: row.id,
+            saleId: row.sale_id,
+            amountPaid: Number(row.amount_paid ?? 0),
+            remainingBalance: Number(row.remaining_balance ?? 0),
+            paymentMethod: row.payment_method,
+            reference: row.reference,
+            cashierName: row.cashier_name,
+            paidAt: row.paid_at
+          }));
+          const movements = movementsResult.rows.map((row) => ({
+            id: row.id,
+            shiftId: row.shift_id,
+            branchId: row.branch_id || undefined,
+            userId: row.user_id || undefined,
+            userName: row.user_name,
+            type: row.type,
+            amount: Number(row.amount ?? 0),
+            reason: row.reason,
+            reference: row.reference || undefined,
+            timestamp: row.created_at
+          }));
+
+          return {
+            generatedAt: new Date().toISOString(),
+            shift: {
+              id: shift.id,
+              userId: shift.user_id,
+              userName: shift.user_name,
+              branchId: shift.branch_id || undefined,
+              branchName: shift.branch_name || shift.branch_id || 'Unassigned branch',
+              openingFloat: Number(shift.opening_float ?? 0),
+              status: shift.status,
+              notes: shift.notes || undefined,
+              openingReference: shift.opening_reference || undefined,
+              closingNotes: shift.closing_notes || undefined,
+              closingCountedCash: shift.closing_counted_cash === null ? undefined : Number(shift.closing_counted_cash),
+              expectedCash: shift.expected_cash === null ? undefined : Number(shift.expected_cash),
+              variance: shift.variance === null ? undefined : Number(shift.variance),
+              closedById: shift.closed_by_id || undefined,
+              closedByName: shift.closed_by_name || undefined,
+              openedAt: shift.opened_at,
+              closedAt: shift.closed_at || undefined,
+              updatedAt: shift.updated_at
+            },
+            summary,
+            totals: {
+              saleCount: sales.length,
+              creditSaleCount: sales.filter((sale) => sale.isCredit || sale.outstandingBalance > 0).length,
+              refundedSaleCount: sales.filter((sale) => sale.refundAmount > 0).length,
+              totalSales: sales.reduce((sum, sale) => sum + sale.totalAmount, 0),
+              totalCollected: sales.reduce((sum, sale) => sum + sale.collectedAmount, 0),
+              totalOutstanding: sales.reduce((sum, sale) => sum + sale.outstandingBalance, 0),
+              totalRefundAmount: sales.reduce((sum, sale) => sum + sale.refundAmount, 0),
+              creditPaymentCount: creditPayments.length,
+              totalCreditPayments: creditPayments.reduce((sum, payment) => sum + payment.amountPaid, 0)
+            },
+            movements,
+            sales,
+            creditPayments
+          };
+        });
+
+        return res.status(200).json(report);
+      }
+
       const payload = await withTransaction(async (client) => {
         const shift = await getOpenShift(client, user.uid);
         if (!shift) {
@@ -203,9 +421,23 @@ export default async function handler(req: any, res: any) {
     const statusCode =
       message.includes('already have an open') || message.includes('There is no open')
         ? 409
+        : message.includes('Permission denied')
+          ? 403
+          : message.includes('Shift not found')
+            ? 404
         : message.includes('cannot be negative')
           ? 400
           : 500;
     return res.status(statusCode).json({ error: message });
   }
+}
+
+function readQueryValue(value: string | string[] | undefined) {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (Array.isArray(value) && typeof value[0] === 'string') {
+    return value[0].trim();
+  }
+  return '';
 }

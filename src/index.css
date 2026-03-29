@@ -23,13 +23,14 @@
     #expense-voucher, #expense-voucher *,
     #credit-receipt, #credit-receipt *,
     #refund-receipt, #refund-receipt *,
+    #cash-shift-receipt, #cash-shift-receipt *,
     #audit-report-a4, #audit-report-a4 *,
     #audit-report-thermal, #audit-report-thermal * {
       visibility: visible !important;
     }
 
     /* Position the active receipt/report at the top */
-    #thermal-receipt, #expense-voucher, #credit-receipt, #refund-receipt, #audit-report-thermal {
+    #thermal-receipt, #expense-voucher, #credit-receipt, #refund-receipt, #cash-shift-receipt, #audit-report-thermal {
       display: block !important;
       position: absolute !important;
       left: 0 !important;

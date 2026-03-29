@@ -21,6 +21,7 @@ import ConfirmDialog from './ConfirmDialog';
 
 import { isCashDrawerEnabled, saleUsesCashDrawer, triggerCashDrawer } from '../services/cashDrawer';
 import { createSale, getShiftStatus } from '../services/platformApi';
+import { formatSaleReceiptNumber } from '../utils/receipts';
 
 export default function POS() {
   const { user } = useAuth();
@@ -401,10 +402,15 @@ export default function POS() {
   const taxRate = settings?.taxRate || 0;
   const total = subtotal;
   const taxAmount = (total * taxRate) / 100;
+  const checkoutCreditAmount = Math.max(total - amountPaid, 0);
   const currentBranchName = branches.find((branch) => branch.id === (currentShift?.branchId || settings?.defaultBranchId))?.name || 'Main Branch';
   const receiptPaymentLabel = (sale: Sale) => {
-    if (sale.paymentMethod === 'credit' && sale.amountPaid > 0) {
+    const hasCreditBalance = Boolean(sale.isCredit || (sale.outstandingBalance || 0) > 0);
+    if (hasCreditBalance && sale.amountPaid > 0 && sale.tenderMethod && sale.tenderMethod !== 'credit') {
       return `${(sale.tenderMethod || 'cash').toUpperCase()} + CREDIT`;
+    }
+    if (hasCreditBalance) {
+      return 'CREDIT';
     }
     return (sale.tenderMethod || sale.paymentMethod).toUpperCase();
   };
@@ -503,19 +509,8 @@ export default function POS() {
       return;
     }
 
-    if (amountPaid < total && paymentMethod === 'cash') {
-      toast.error('Insufficient payment for cash sale! Please select Credit if this is a partial payment.');
-      return;
-    }
-
-    if (paymentMethod === 'credit' && !customerName.trim()) {
-      toast.error('Customer name is required for credit sales!');
-      return;
-    }
-
-    const isCredit = paymentMethod === 'credit' || amountPaid < total;
-    if (isCredit && !['superadmin', 'admin'].includes(user?.role || '')) {
-      toast.error('Only administrators can process partial payments or credit sales!');
+    if (checkoutCreditAmount > 0 && !customerId && !customerName.trim()) {
+      toast.error('Select or enter the customer taking the credit before completing checkout.');
       return;
     }
 
@@ -810,9 +805,20 @@ export default function POS() {
               </div>
             )}
 
+            {checkoutCreditAmount > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700">Credit Detected</p>
+                <p className="mt-2 font-semibold">
+                  KES {checkoutCreditAmount.toLocaleString()} will be recorded as customer credit and tracked across the system.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-2 relative" ref={customerSearchRef}>
               <div className="flex justify-between items-center">
-                <label className="text-sm font-medium text-gray-700">Customer Search</label>
+                <label className="text-sm font-medium text-gray-700">
+                  Customer Search {checkoutCreditAmount > 0 && <span className="text-amber-600">(required for credit)</span>}
+                </label>
                 {customerId && (
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-bold px-2 py-1 rounded-lg ${customerBalance > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
@@ -956,7 +962,7 @@ export default function POS() {
                   <CheckCircle className="w-8 h-8" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900">KES {lastSale.totalAmount.toLocaleString()}</h2>
-                <p className="text-xs text-gray-500">Transaction ID: {lastSale.id}</p>
+                <p className="text-xs text-gray-500">Receipt #: {formatSaleReceiptNumber(lastSale.id)}</p>
               </div>
 
               {/* Receipt Preview */}
@@ -972,7 +978,7 @@ export default function POS() {
                   <span>Date: {toDate(lastSale.timestamp).toLocaleDateString()}</span>
                   <span>Time: {toDate(lastSale.timestamp).toLocaleTimeString()}</span>
                 </div>
-                <p>Receipt: {lastSale.id.slice(-8).toUpperCase()}</p>
+                <p>Receipt #: {formatSaleReceiptNumber(lastSale.id)}</p>
                 {lastSale.shiftId && <p>Shift: {lastSale.shiftId.slice(-6).toUpperCase()}</p>}
                 <p>Cashier: {lastSale.cashierName}</p>
                 {lastSale.customerName && <p>Customer: {lastSale.customerName}</p>}
@@ -1013,6 +1019,12 @@ export default function POS() {
                     <span>CHANGE</span>
                     <span>KES {lastSale.balance.toLocaleString()}</span>
                   </div>
+                  {(lastSale.outstandingBalance || 0) > 0 && (
+                    <div className="flex justify-between font-bold text-amber-700 border-t border-dashed border-gray-300 pt-1 mt-1">
+                      <span>CREDIT AMOUNT</span>
+                      <span>KES {(lastSale.outstandingBalance || 0).toLocaleString()}</span>
+                    </div>
+                  )}
                   {settings?.loyaltyPointRate && (
                     <div className="flex justify-between text-indigo-600 border-t border-dashed border-gray-300 pt-1 mt-1">
                       <span>POINTS EARNED</span>
@@ -1077,7 +1089,7 @@ export default function POS() {
               <span>DATE: {toDate(lastSale.timestamp).toLocaleDateString()}</span>
               <span>TIME: {toDate(lastSale.timestamp).toLocaleTimeString()}</span>
             </div>
-            <p>RECEIPT #: {lastSale.id.toUpperCase()}</p>
+            <p>RECEIPT #: {formatSaleReceiptNumber(lastSale.id)}</p>
             {lastSale.shiftId && <p>SHIFT: {lastSale.shiftId.toUpperCase()}</p>}
             <p>CASHIER: {lastSale.cashierName.toUpperCase()}</p>
             {lastSale.customerName && <p>CUSTOMER: {lastSale.customerName.toUpperCase()}</p>}
@@ -1123,6 +1135,12 @@ export default function POS() {
               <span>CHANGE</span>
               <span>KES {lastSale.balance.toLocaleString()}</span>
             </div>
+            {(lastSale.outstandingBalance || 0) > 0 && (
+              <div className="flex justify-between font-bold border-t border-dashed border-gray-300 pt-1 mt-1">
+                <span>CREDIT AMOUNT</span>
+                <span>KES {(lastSale.outstandingBalance || 0).toLocaleString()}</span>
+              </div>
+            )}
             {(lastSale.newTotalBalance !== undefined && lastSale.newTotalBalance > 0) && (
               <div className="flex justify-between font-bold border-t border-dashed border-gray-300 pt-1 mt-1">
                 <span>TOTAL OUTSTANDING</span>

@@ -55,7 +55,12 @@ export async function refundSale(input: {
   refundReason: string;
   itemId?: string;
 }) {
-  return requestJson<{ ok: true; refundAmount: number; fullyRefunded: boolean }>('/api/transactions/refund', {
+  return requestJson<{
+    ok: true;
+    refundAmount: number;
+    fullyRefunded: boolean;
+    sale: any;
+  }>('/api/transactions/refund', {
     method: 'POST',
     body: JSON.stringify(input)
   });
@@ -83,6 +88,13 @@ export async function getShiftStatus() {
     shift: any | null;
     summary: any | null;
   }>('/api/transactions/shift', {
+    method: 'GET',
+    headers: {}
+  });
+}
+
+export async function getShiftReport(shiftId: string) {
+  return requestJson<any>(`/api/transactions/shift?shiftId=${encodeURIComponent(shiftId)}`, {
     method: 'GET',
     headers: {}
   });

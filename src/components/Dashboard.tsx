@@ -148,7 +148,7 @@ export default function Dashboard() {
       paymentMethod: s.paymentMethod,
       amount: s.totalAmount,
       type: 'sale' as const,
-      balance: s.paymentMethod === 'credit' ? s.outstandingBalance : 0
+      balance: s.outstandingBalance || 0
     })),
     ...recentSales.filter(s => (s.refundAmount || 0) > 0).map(s => ({
       id: `refund-${s.id}`,
@@ -159,6 +159,7 @@ export default function Dashboard() {
       amount: s.refundAmount || 0,
       type: 'refund' as const,
       balance: 0,
+      saleId: s.id,
       refundReason: s.refundReason
     })),
     ...creditPayments.map(p => {
@@ -194,7 +195,8 @@ export default function Dashboard() {
     setIsPrinting(true);
     try {
       if (receipt.type === 'sale' || receipt.type === 'refund') {
-        const sale = sales.find(s => s.id === receipt.id);
+        const sourceSaleId = receipt.saleId || receipt.id.replace(/^refund-/, '');
+        const sale = sales.find(s => s.id === sourceSaleId);
         if (sale) {
           const itemsSnapshot = await getDocs(collection(db, `sales/${sale.id}/items`));
           const items = itemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SaleItem));
@@ -224,7 +226,8 @@ export default function Dashboard() {
   const handlePreviewReceipt = async (receipt: DashboardReceipt) => {
     try {
       if (receipt.type === 'sale' || receipt.type === 'refund') {
-        const sale = sales.find(s => s.id === receipt.id);
+        const sourceSaleId = receipt.saleId || receipt.id.replace(/^refund-/, '');
+        const sale = sales.find(s => s.id === sourceSaleId);
         if (sale) {
           const itemsSnapshot = await getDocs(collection(db, `sales/${sale.id}/items`));
           const items = itemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SaleItem));
@@ -571,10 +574,10 @@ export default function Dashboard() {
                         <span>KES {(selectedCreditPayment.remainingBalance !== undefined ? selectedCreditPayment.remainingBalance : (credits.find(c => c.id === selectedCreditPayment.creditId)?.outstandingBalance || 0)).toLocaleString()}</span>
                       </div>
                     )}
-                    {selectedSale?.paymentMethod === 'credit' && (
+                    {(selectedSale?.isCredit || (selectedSale?.outstandingBalance || 0) > 0) && (
                       <div className="flex justify-between text-xs font-bold text-red-600">
                         <span>CREDIT BALANCE:</span>
-                        <span>KES {selectedSale.outstandingBalance.toLocaleString()}</span>
+                        <span>KES {(selectedSale.outstandingBalance || 0).toLocaleString()}</span>
                       </div>
                     )}
                   </div>
@@ -692,10 +695,10 @@ export default function Dashboard() {
                   <span>KES {(selectedCreditPayment.remainingBalance !== undefined ? selectedCreditPayment.remainingBalance : (credits.find(c => c.id === selectedCreditPayment.creditId)?.outstandingBalance || 0)).toLocaleString()}</span>
                 </div>
               )}
-              {selectedSale?.paymentMethod === 'credit' && (
+              {(selectedSale?.isCredit || (selectedSale?.outstandingBalance || 0) > 0) && (
                 <div className="flex justify-between font-bold">
                   <span>CREDIT BALANCE</span>
-                  <span>KES {selectedSale.outstandingBalance.toLocaleString()}</span>
+                  <span>KES {(selectedSale.outstandingBalance || 0).toLocaleString()}</span>
                 </div>
               )}
             </div>

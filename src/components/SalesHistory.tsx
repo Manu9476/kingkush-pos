@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 import { refundSale } from '../services/platformApi';
+import { formatRefundReceiptNumber } from '../utils/receipts';
 
 export default function SalesHistory() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -73,6 +74,29 @@ export default function SalesHistory() {
     }
   }, [selectedSale]);
 
+  useEffect(() => {
+    if (!selectedSale) {
+      return;
+    }
+
+    const latestSale = sales.find((sale) => sale.id === selectedSale.id);
+    if (!latestSale) {
+      return;
+    }
+
+    const hasMeaningfulChange =
+      latestSale.isRefunded !== selectedSale.isRefunded ||
+      latestSale.refundAmount !== selectedSale.refundAmount ||
+      latestSale.refundedAt !== selectedSale.refundedAt ||
+      latestSale.refundedBy !== selectedSale.refundedBy ||
+      latestSale.refundReason !== selectedSale.refundReason ||
+      latestSale.outstandingBalance !== selectedSale.outstandingBalance;
+
+    if (hasMeaningfulChange) {
+      setSelectedSale((current) => current ? { ...current, ...latestSale } : current);
+    }
+  }, [sales, selectedSale]);
+
   const handlePartialRefund = async (item: SaleItem) => {
     if (!selectedSale || !refundReason.trim()) {
       toast.error('Please provide a refund reason first.');
@@ -87,11 +111,26 @@ export default function SalesHistory() {
       onConfirm: async () => {
         setIsRefunding(true);
         try {
-          await refundSale({
+          const response = await refundSale({
             saleId: selectedSale.id,
             refundReason,
             itemId: item.id
           });
+          setSelectedSale((current) => current ? { ...current, ...response.sale } : current);
+          setSaleItems((current) =>
+            current.map((entry) =>
+              entry.id === item.id
+                ? {
+                    ...entry,
+                    isRefunded: true,
+                    status: 'refunded',
+                    refundedAt: response.sale.refundedAt,
+                    refundedBy: response.sale.refundedBy
+                  }
+                : entry
+            )
+          );
+          setRefundReason('');
           toast.success('Item refunded successfully. Stock levels updated.');
         } catch (error) {
           console.error('Partial refund error:', error);
@@ -114,11 +153,20 @@ export default function SalesHistory() {
       onConfirm: async () => {
         setIsRefunding(true);
         try {
-          await refundSale({
+          const response = await refundSale({
             saleId: selectedSale.id,
             refundReason
           });
-          setSelectedSale(null);
+          setSelectedSale((current) => current ? { ...current, ...response.sale } : current);
+          setSaleItems((current) =>
+            current.map((entry) => ({
+              ...entry,
+              isRefunded: true,
+              status: 'refunded',
+              refundedAt: response.sale.refundedAt,
+              refundedBy: response.sale.refundedBy
+            }))
+          );
           setRefundReason('');
           toast.success('Refund processed successfully. Stock levels restored.');
         } catch (error) {
@@ -135,6 +183,9 @@ export default function SalesHistory() {
   const filteredSales = sales.filter(s => 
     s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.customerName?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const hasRefundActivity = Boolean(
+    selectedSale && ((selectedSale.refundAmount || 0) > 0 || saleItems.some((item) => item.isRefunded))
   );
 
   return (
@@ -213,6 +264,8 @@ export default function SalesHistory() {
                   <td className="px-6 py-4 text-center">
                     {sale.isRefunded ? (
                       <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-[10px] font-bold uppercase tracking-wider">Refunded</span>
+                    ) : (sale.refundAmount || 0) > 0 ? (
+                      <span className="px-3 py-1 bg-amber-100 text-amber-600 rounded-full text-[10px] font-bold uppercase tracking-wider">Partial Refund</span>
                     ) : (
                       <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-[10px] font-bold uppercase tracking-wider">Completed</span>
                     )}
@@ -342,25 +395,25 @@ export default function SalesHistory() {
                 </div>
               )}
 
-              {selectedSale.isRefunded && (
+              {hasRefundActivity && (
                 <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 space-y-2">
                   <div className="flex items-center gap-3 text-gray-400">
                     <CheckCircle className="w-6 h-6" />
-                    <h4 className="font-bold">Refunded</h4>
+                    <h4 className="font-bold">{selectedSale.isRefunded ? 'Refunded' : 'Refund Activity Recorded'}</h4>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-xs">
                     <div>
                       <p className="text-gray-400 font-bold uppercase tracking-widest mb-1">Refunded At</p>
-                      <p className="text-gray-900 font-bold">{new Date(selectedSale.refundedAt!).toLocaleString()}</p>
+                      <p className="text-gray-900 font-bold">{selectedSale.refundedAt ? new Date(selectedSale.refundedAt).toLocaleString() : 'Pending sync'}</p>
                     </div>
                     <div>
                       <p className="text-gray-400 font-bold uppercase tracking-widest mb-1">Processed By</p>
-                      <p className="text-gray-900 font-bold">{selectedSale.refundedBy}</p>
+                      <p className="text-gray-900 font-bold">{selectedSale.refundedBy || 'Pending sync'}</p>
                     </div>
                   </div>
                   <div className="pt-2">
                     <p className="text-gray-400 font-bold uppercase tracking-widest mb-1">Reason</p>
-                    <p className="text-gray-900 font-medium italic">"{selectedSale.refundReason}"</p>
+                    <p className="text-gray-900 font-medium italic">"{selectedSale.refundReason || 'No reason recorded'}"</p>
                   </div>
                   <button 
                     onClick={handlePrintRefund}
@@ -378,7 +431,7 @@ export default function SalesHistory() {
 
       {/* Hidden Refund Receipt for Printing */}
       <div id="refund-receipt" className="hidden print:block font-mono text-[12px] leading-tight p-4 w-[80mm]">
-        {selectedSale && selectedSale.isRefunded && (
+        {selectedSale && hasRefundActivity && (
           <>
             <div className="text-center mb-4">
               <h1 className="font-bold text-lg uppercase">KingKush Supermarket</h1>
@@ -388,11 +441,13 @@ export default function SalesHistory() {
             </div>
             
             <div className="mb-2">
-              <p>DATE: {new Date(selectedSale.refundedAt!).toLocaleDateString()}</p>
-              <p>TIME: {new Date(selectedSale.refundedAt!).toLocaleTimeString()}</p>
+              <p>DATE: {selectedSale.refundedAt ? new Date(selectedSale.refundedAt).toLocaleDateString() : toDate(selectedSale.timestamp).toLocaleDateString()}</p>
+              <p>TIME: {selectedSale.refundedAt ? new Date(selectedSale.refundedAt).toLocaleTimeString() : toDate(selectedSale.timestamp).toLocaleTimeString()}</p>
+              <p>REFUND #: {formatRefundReceiptNumber(selectedSale.id)}</p>
               <p>ORIGINAL SALE: #{selectedSale.id.toUpperCase()}</p>
-              <p>REFUNDED BY: {selectedSale.refundedBy?.toUpperCase()}</p>
+              <p>REFUNDED BY: {(selectedSale.refundedBy || 'SYSTEM').toUpperCase()}</p>
               <p>CUSTOMER: {(selectedSale.customerName || 'Walk-in').toUpperCase()}</p>
+              <p>STATUS: {selectedSale.isRefunded ? 'FULL REFUND' : 'PARTIAL REFUND'}</p>
               <p>********************************</p>
             </div>
 
@@ -420,7 +475,7 @@ export default function SalesHistory() {
               </div>
               <div className="mt-2">
                 <p className="text-[10px] font-bold uppercase">REASON:</p>
-                <p className="italic text-[10px]">{selectedSale.refundReason}</p>
+                <p className="italic text-[10px]">{selectedSale.refundReason || 'No reason recorded'}</p>
               </div>
             </div>
 

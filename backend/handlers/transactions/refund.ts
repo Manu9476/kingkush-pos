@@ -42,6 +42,7 @@ export default async function handler(req: any, res: any) {
         tender_method: string | null;
         outstanding_balance: string;
         refund_amount: string;
+        refund_reason: string | null;
       }>(
         `
         SELECT
@@ -54,7 +55,8 @@ export default async function handler(req: any, res: any) {
           payment_method,
           tender_method,
           outstanding_balance,
-          refund_amount
+          refund_amount,
+          refund_reason
         FROM sales
         WHERE id = $1
         FOR UPDATE
@@ -162,6 +164,11 @@ export default async function handler(req: any, res: any) {
         targetItems.every((target) => target.id !== item.id) && !item.is_refunded
       );
       const fullyRefunded = remainingUnrefunded.length === 0;
+      const aggregateRefundReason = sale.refund_reason
+        ? `${sale.refund_reason} | ${refundReason}`
+        : refundReason;
+      const totalRefundAmount = Number(sale.refund_amount ?? 0) + refundAmount;
+      const updatedOutstandingBalance = Math.max(0, Number(sale.outstanding_balance ?? 0) - refundAmount);
 
       await client.query(
         `
@@ -169,13 +176,13 @@ export default async function handler(req: any, res: any) {
         SET
           refund_amount = refund_amount + $2,
           is_refunded = CASE WHEN $3::boolean THEN TRUE ELSE is_refunded END,
-          refunded_at = CASE WHEN $3::boolean THEN $4::timestamptz ELSE refunded_at END,
-          refunded_by = CASE WHEN $3::boolean THEN $5 ELSE refunded_by END,
-          refund_reason = CASE WHEN $3::boolean THEN $6 ELSE refund_reason END,
+          refunded_at = $4::timestamptz,
+          refunded_by = $5,
+          refund_reason = $6,
           outstanding_balance = GREATEST(outstanding_balance - $2, 0)
         WHERE id = $1
         `,
-        [saleId, refundAmount, fullyRefunded, refundedAt, user.displayName || user.username, refundReason]
+        [saleId, refundAmount, fullyRefunded, refundedAt, user.displayName || user.username, aggregateRefundReason]
       );
 
       if (sale.customer_id && sale.is_credit) {
@@ -226,7 +233,16 @@ export default async function handler(req: any, res: any) {
       return {
         ok: true,
         refundAmount,
-        fullyRefunded
+        fullyRefunded,
+        sale: {
+          id: saleId,
+          isRefunded: fullyRefunded,
+          refundAmount: totalRefundAmount,
+          refundedAt,
+          refundedBy: user.displayName || user.username,
+          refundReason: aggregateRefundReason,
+          outstandingBalance: updatedOutstandingBalance
+        }
       };
     });
 
