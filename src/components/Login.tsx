@@ -103,15 +103,27 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                className="group relative w-full overflow-hidden rounded-2xl border border-indigo-950/10 bg-[linear-gradient(135deg,#312e81_0%,#4338ca_55%,#4f46e5_100%)] px-6 py-4 text-white shadow-[0_14px_30px_rgba(79,70,229,0.24)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(79,70,229,0.28)] active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
               >
+                <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/60" />
                 {loading ? (
-                  <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span className="relative flex items-center justify-center py-1">
+                    <span className="h-6 w-6 rounded-full border-4 border-white/25 border-t-white animate-spin" />
+                  </span>
                 ) : (
-                  <>
-                    Sign In
-                    <ArrowRight className="w-6 h-6" />
-                  </>
+                  <span className="relative flex items-center justify-between gap-4">
+                    <span className="text-left">
+                      <span className="block text-[10px] font-black uppercase tracking-[0.28em] text-indigo-100/80">
+                        Secure Access
+                      </span>
+                      <span className="mt-1 block text-lg font-black tracking-tight">
+                        Sign In
+                      </span>
+                    </span>
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/12 ring-1 ring-white/20 transition-transform duration-200 group-hover:translate-x-1">
+                      <ArrowRight className="w-5 h-5" />
+                    </span>
+                  </span>
                 )}
               </button>
             </form>
