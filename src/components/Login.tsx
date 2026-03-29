@@ -1,8 +1,78 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { auth, googleProvider, signInWithPopup } from '../data';
-import { Shield, X, ArrowRight, AlertCircle, User, Lock, Eye, EyeOff } from 'lucide-react';
-import ReadinessPanel from './ReadinessPanel';
+import { ArrowRight, AlertCircle, User, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../App';
+
+function LoginLamp({ isOn }: { isOn: boolean }) {
+  return (
+    <div className="relative mx-auto h-64 w-64">
+      <div
+        className={`absolute left-1/2 top-10 h-32 w-32 -translate-x-1/2 rounded-full blur-3xl transition-all duration-500 ${
+          isOn ? 'bg-amber-200/90 opacity-100 animate-pulse' : 'bg-slate-200/70 opacity-45'
+        }`}
+      />
+      <span
+        className={`absolute left-1/2 top-0 h-10 w-1 -translate-x-1/2 rounded-full transition-all duration-500 ${
+          isOn ? 'bg-amber-300 opacity-100' : 'bg-slate-300 opacity-0'
+        }`}
+      />
+      <span
+        className={`absolute left-[26%] top-7 h-8 w-1 rounded-full transition-all duration-500 ${
+          isOn ? 'bg-amber-300 opacity-100' : 'bg-slate-300 opacity-0'
+        }`}
+        style={{ transform: 'rotate(-55deg)' }}
+      />
+      <span
+        className={`absolute right-[26%] top-7 h-8 w-1 rounded-full transition-all duration-500 ${
+          isOn ? 'bg-amber-300 opacity-100' : 'bg-slate-300 opacity-0'
+        }`}
+        style={{ transform: 'rotate(55deg)' }}
+      />
+      <span
+        className={`absolute left-[18%] top-[72px] h-7 w-1 rounded-full transition-all duration-500 ${
+          isOn ? 'bg-amber-300 opacity-100' : 'bg-slate-300 opacity-0'
+        }`}
+        style={{ transform: 'rotate(-88deg)' }}
+      />
+      <span
+        className={`absolute right-[18%] top-[72px] h-7 w-1 rounded-full transition-all duration-500 ${
+          isOn ? 'bg-amber-300 opacity-100' : 'bg-slate-300 opacity-0'
+        }`}
+        style={{ transform: 'rotate(88deg)' }}
+      />
+
+      <div
+        className={`absolute left-1/2 top-7 h-[120px] w-24 -translate-x-1/2 rounded-[46%_46%_40%_40%/58%_58%_34%_34%] border transition-all duration-500 ${
+          isOn
+            ? 'border-amber-100 bg-[radial-gradient(circle_at_50%_25%,rgba(255,255,255,0.98)_0%,rgba(254,240,138,0.96)_45%,rgba(251,191,36,0.82)_100%)] shadow-[0_0_32px_rgba(251,191,36,0.45)]'
+            : 'border-slate-300 bg-[radial-gradient(circle_at_50%_25%,rgba(255,255,255,0.92)_0%,rgba(226,232,240,0.96)_55%,rgba(148,163,184,0.72)_100%)]'
+        }`}
+      >
+        <div className="absolute left-1/2 top-12 h-7 w-10 -translate-x-1/2 rounded-full border-2 border-slate-700/70" />
+        <div
+          className={`absolute left-1/2 top-[76px] h-2.5 w-2.5 -translate-x-1/2 rounded-full transition-all duration-500 ${
+            isOn ? 'bg-amber-950/80' : 'bg-slate-500/60'
+          }`}
+        />
+        <div
+          className={`absolute left-1/2 top-[87px] h-5 w-1 -translate-x-1/2 rounded-full transition-all duration-500 ${
+            isOn ? 'bg-amber-950/80' : 'bg-slate-500/60'
+          }`}
+        />
+      </div>
+
+      <div className="absolute left-1/2 top-[144px] h-9 w-14 -translate-x-1/2 rounded-b-2xl rounded-t-md bg-slate-700">
+        <span className="absolute inset-x-2 top-2 h-px bg-white/30" />
+        <span className="absolute inset-x-2 top-4 h-px bg-white/25" />
+        <span className="absolute inset-x-2 top-6 h-px bg-white/20" />
+      </div>
+      <div className="absolute left-1/2 top-[180px] h-14 w-2 -translate-x-1/2 rounded-full bg-slate-700" />
+      <div className="absolute left-1/2 top-[228px] h-2 w-24 -translate-x-1/2 rounded-full bg-slate-500/70" />
+      <div className="absolute left-1/2 top-[238px] h-5 w-40 -translate-x-1/2 rounded-full bg-slate-900 shadow-[0_20px_32px_rgba(15,23,42,0.18)]" />
+    </div>
+  );
+}
 
 export default function Login() {
   const { login } = useAuth()!;
@@ -10,7 +80,6 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showReadiness, setShowReadiness] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleGoogleLogin = async () => {
@@ -25,7 +94,7 @@ export default function Login() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -39,148 +108,154 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-indigo-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
-          {/* Decorative background element */}
-          <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-50 rounded-full blur-3xl opacity-50" />
-          <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-50 rounded-full blur-3xl opacity-50" />
-          
-          <div className="relative">
-            <div className="flex flex-col items-center mb-10">
-              <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center mb-6 shadow-lg shadow-indigo-200">
-                <Shield className="w-10 h-10 text-white" />
+    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#e0e7ff_0%,#eef2ff_38%,#f8fafc_100%)] px-3 py-3 sm:px-5 sm:py-4">
+      <div className="mx-auto flex min-h-[calc(100vh-24px)] max-w-5xl items-center justify-center">
+        <div className="w-full max-h-[calc(100vh-24px)] overflow-auto rounded-[28px] border border-white/70 bg-white/95 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur md:grid md:grid-cols-[0.94fr_1.06fr] md:overflow-hidden">
+          <section className="relative hidden overflow-hidden border-r border-slate-200/70 bg-[linear-gradient(180deg,#fffdf7_0%,#fff7e6_48%,#f6f3ff_100%)] p-8 md:flex md:flex-col md:justify-between lg:p-10">
+            <div className="relative z-10">
+              <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm">
+                Lighting up your sales workspace
               </div>
-              <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-2">KingKush</h1>
-              <p className="text-gray-600 font-bold uppercase text-[10px] tracking-[0.2em]">Premium Sales System</p>
+              <h1 className="mt-5 max-w-sm text-3xl font-black tracking-tight text-slate-900">
+                A brighter start for every shift.
+              </h1>
+              <p className="mt-3 max-w-sm text-sm leading-6 text-slate-600">
+                Sign in to open sales, manage customers, and keep your day moving from one clean workspace.
+              </p>
             </div>
 
-            {error && (
-              <div className="mb-8 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-sm font-bold flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-                <AlertCircle className="w-5 h-5 shrink-0" />
-                {error}
-              </div>
-            )}
+            <div className="relative z-10 flex flex-1 items-center justify-center py-6">
+              <LoginLamp isOn={loading} />
+            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-4">Username</label>
-                <div className="relative">
-                  <User className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 placeholder:text-gray-300 outline-none"
-                    placeholder="Enter username"
-                    required
-                  />
-                </div>
+            <div className="relative z-10 flex items-center justify-between rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-sm">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Lamp Status
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">
+                  {loading ? 'Power on: authenticating...' : 'Power off: waiting for sign in'}
+                </p>
               </div>
+              <span
+                className={`h-3.5 w-3.5 rounded-full ${
+                  loading ? 'bg-amber-400 shadow-[0_0_18px_rgba(251,191,36,0.9)]' : 'bg-slate-300'
+                }`}
+              />
+            </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-4">Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-14 pr-14 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 placeholder:text-gray-300 outline-none"
-                    placeholder="••••••••"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+            <div className="absolute left-8 top-8 h-20 w-20 rounded-full bg-white/40 blur-2xl" />
+            <div className="absolute bottom-16 right-10 h-24 w-24 rounded-full bg-amber-100/60 blur-3xl" />
+          </section>
+
+          <section className="flex flex-col justify-center p-6 sm:p-8 lg:px-10 lg:py-9">
+            <div className="mx-auto w-full max-w-md">
+              <div className="mb-6">
+                <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                  KingKush Sale
                 </div>
+                <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-900">
+                  Welcome back
+                </h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  Sign in to continue to your workspace.
+                </p>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="group relative w-full overflow-hidden rounded-2xl border border-indigo-950/10 bg-[linear-gradient(135deg,#312e81_0%,#4338ca_55%,#4f46e5_100%)] px-6 py-4 text-white shadow-[0_14px_30px_rgba(79,70,229,0.24)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(79,70,229,0.28)] active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
-              >
-                <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/60" />
-                {loading ? (
-                  <span className="relative flex items-center justify-center py-1">
-                    <span className="h-6 w-6 rounded-full border-4 border-white/25 border-t-white animate-spin" />
-                  </span>
-                ) : (
-                  <span className="relative flex items-center justify-between gap-4">
-                    <span className="text-left">
-                      <span className="block text-[10px] font-black uppercase tracking-[0.28em] text-indigo-100/80">
-                        Secure Access
-                      </span>
-                      <span className="mt-1 block text-lg font-black tracking-tight">
-                        Sign In
-                      </span>
-                    </span>
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/12 ring-1 ring-white/20 transition-transform duration-200 group-hover:translate-x-1">
-                      <ArrowRight className="w-5 h-5" />
-                    </span>
-                  </span>
-                )}
-              </button>
-            </form>
-
-            <div className="mt-10">
-              <div className="relative flex items-center justify-center mb-8">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-100"></div>
+              {error && (
+                <div className="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  <AlertCircle className="mt-0.5 h-[18px] w-[18px] shrink-0" />
+                  <span>{error}</span>
                 </div>
-                <span className="relative px-4 bg-white text-[10px] font-black text-gray-500 uppercase tracking-widest">Or Super Admin Google Login</span>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    Username
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                      placeholder="Enter username"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                      placeholder="Enter password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-semibold text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                >
+                  {loading ? (
+                    <>
+                      <span className="h-[18px] w-[18px] rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    <>
+                      Sign in
+                      <ArrowRight className="h-[18px] w-[18px]" />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              <div className="my-5 flex items-center gap-3">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  Google
+                </span>
+                <div className="h-px flex-1 bg-slate-200" />
               </div>
 
               <button
                 onClick={handleGoogleLogin}
                 disabled={loading}
-                className="w-full bg-white border-2 border-gray-100 text-gray-600 py-4 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-3"
+                className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <div className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">G</div>
-                Google Account
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  G
+                </span>
+                Continue with Google
               </button>
-            </div>
-          </div>
-        </div>
 
-        <div className="mt-8 flex flex-col items-center gap-4">
-          <button 
-            onClick={() => setShowReadiness(true)}
-            className="flex items-center gap-2 text-[10px] font-black text-indigo-200 uppercase tracking-widest hover:text-white transition-colors"
-          >
-            <Shield className="w-4 h-4" />
-            System Readiness Check
-          </button>
-          <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-[0.3em]">© 2026 KingKush Sale</p>
+              <p className="mt-5 text-center text-[11px] font-medium text-slate-400">
+                (c) 2026 KingKush Sale
+              </p>
+            </div>
+          </section>
         </div>
       </div>
-
-      {showReadiness && (
-        <div className="fixed inset-0 bg-indigo-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="p-8 border-b border-gray-50 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Shield className="w-6 h-6 text-indigo-600" />
-                <h2 className="text-xl font-black text-gray-900">System Readiness</h2>
-              </div>
-              <button 
-                onClick={() => setShowReadiness(false)}
-                className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
-              >
-                <X className="w-6 h-6 text-gray-500" />
-              </button>
-            </div>
-            <div className="p-8">
-              <ReadinessPanel />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
