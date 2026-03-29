@@ -9,35 +9,35 @@ function LoginLamp({ isOn }: { isOn: boolean }) {
     <div className="relative mx-auto h-64 w-64">
       <div
         className={`absolute left-1/2 top-10 h-32 w-32 -translate-x-1/2 rounded-full blur-3xl transition-all duration-500 ${
-          isOn ? 'bg-amber-200/90 opacity-100 animate-pulse' : 'bg-slate-200/70 opacity-45'
+          isOn ? 'bg-amber-200/90 opacity-100 animate-pulse' : 'bg-indigo-200/30 opacity-45'
         }`}
       />
       <span
         className={`absolute left-1/2 top-0 h-10 w-1 -translate-x-1/2 rounded-full transition-all duration-500 ${
-          isOn ? 'bg-amber-300 opacity-100' : 'bg-slate-300 opacity-0'
+          isOn ? 'bg-amber-300 opacity-100' : 'bg-indigo-200/50 opacity-0'
         }`}
       />
       <span
         className={`absolute left-[26%] top-7 h-8 w-1 rounded-full transition-all duration-500 ${
-          isOn ? 'bg-amber-300 opacity-100' : 'bg-slate-300 opacity-0'
+          isOn ? 'bg-amber-300 opacity-100' : 'bg-indigo-200/50 opacity-0'
         }`}
         style={{ transform: 'rotate(-55deg)' }}
       />
       <span
         className={`absolute right-[26%] top-7 h-8 w-1 rounded-full transition-all duration-500 ${
-          isOn ? 'bg-amber-300 opacity-100' : 'bg-slate-300 opacity-0'
+          isOn ? 'bg-amber-300 opacity-100' : 'bg-indigo-200/50 opacity-0'
         }`}
         style={{ transform: 'rotate(55deg)' }}
       />
       <span
         className={`absolute left-[18%] top-[72px] h-7 w-1 rounded-full transition-all duration-500 ${
-          isOn ? 'bg-amber-300 opacity-100' : 'bg-slate-300 opacity-0'
+          isOn ? 'bg-amber-300 opacity-100' : 'bg-indigo-200/50 opacity-0'
         }`}
         style={{ transform: 'rotate(-88deg)' }}
       />
       <span
         className={`absolute right-[18%] top-[72px] h-7 w-1 rounded-full transition-all duration-500 ${
-          isOn ? 'bg-amber-300 opacity-100' : 'bg-slate-300 opacity-0'
+          isOn ? 'bg-amber-300 opacity-100' : 'bg-indigo-200/50 opacity-0'
         }`}
         style={{ transform: 'rotate(88deg)' }}
       />
@@ -46,30 +46,30 @@ function LoginLamp({ isOn }: { isOn: boolean }) {
         className={`absolute left-1/2 top-7 h-[120px] w-24 -translate-x-1/2 rounded-[46%_46%_40%_40%/58%_58%_34%_34%] border transition-all duration-500 ${
           isOn
             ? 'border-amber-100 bg-[radial-gradient(circle_at_50%_25%,rgba(255,255,255,0.98)_0%,rgba(254,240,138,0.96)_45%,rgba(251,191,36,0.82)_100%)] shadow-[0_0_32px_rgba(251,191,36,0.45)]'
-            : 'border-slate-300 bg-[radial-gradient(circle_at_50%_25%,rgba(255,255,255,0.92)_0%,rgba(226,232,240,0.96)_55%,rgba(148,163,184,0.72)_100%)]'
+            : 'border-indigo-100/70 bg-[radial-gradient(circle_at_50%_25%,rgba(255,255,255,0.92)_0%,rgba(224,231,255,0.96)_55%,rgba(129,140,248,0.4)_100%)]'
         }`}
       >
-        <div className="absolute left-1/2 top-12 h-7 w-10 -translate-x-1/2 rounded-full border-2 border-slate-700/70" />
+        <div className="absolute left-1/2 top-12 h-7 w-10 -translate-x-1/2 rounded-full border-2 border-indigo-950/60" />
         <div
           className={`absolute left-1/2 top-[76px] h-2.5 w-2.5 -translate-x-1/2 rounded-full transition-all duration-500 ${
-            isOn ? 'bg-amber-950/80' : 'bg-slate-500/60'
+            isOn ? 'bg-amber-950/80' : 'bg-indigo-500/50'
           }`}
         />
         <div
           className={`absolute left-1/2 top-[87px] h-5 w-1 -translate-x-1/2 rounded-full transition-all duration-500 ${
-            isOn ? 'bg-amber-950/80' : 'bg-slate-500/60'
+            isOn ? 'bg-amber-950/80' : 'bg-indigo-500/50'
           }`}
         />
       </div>
 
-      <div className="absolute left-1/2 top-[144px] h-9 w-14 -translate-x-1/2 rounded-b-2xl rounded-t-md bg-slate-700">
+      <div className="absolute left-1/2 top-[144px] h-9 w-14 -translate-x-1/2 rounded-b-2xl rounded-t-md bg-indigo-950/85">
         <span className="absolute inset-x-2 top-2 h-px bg-white/30" />
         <span className="absolute inset-x-2 top-4 h-px bg-white/25" />
         <span className="absolute inset-x-2 top-6 h-px bg-white/20" />
       </div>
-      <div className="absolute left-1/2 top-[180px] h-14 w-2 -translate-x-1/2 rounded-full bg-slate-700" />
-      <div className="absolute left-1/2 top-[228px] h-2 w-24 -translate-x-1/2 rounded-full bg-slate-500/70" />
-      <div className="absolute left-1/2 top-[238px] h-5 w-40 -translate-x-1/2 rounded-full bg-slate-900 shadow-[0_20px_32px_rgba(15,23,42,0.18)]" />
+      <div className="absolute left-1/2 top-[180px] h-14 w-2 -translate-x-1/2 rounded-full bg-indigo-950/85" />
+      <div className="absolute left-1/2 top-[228px] h-2 w-24 -translate-x-1/2 rounded-full bg-indigo-300/60" />
+      <div className="absolute left-1/2 top-[238px] h-5 w-40 -translate-x-1/2 rounded-full bg-indigo-950 shadow-[0_20px_32px_rgba(49,46,129,0.24)]" />
     </div>
   );
 }
@@ -108,18 +108,18 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#e0e7ff_0%,#eef2ff_38%,#f8fafc_100%)] px-3 py-3 sm:px-5 sm:py-4">
+    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#6366f1_0%,#4338ca_32%,#312e81_68%,#1e1b4b_100%)] px-3 py-3 sm:px-5 sm:py-4">
       <div className="mx-auto flex min-h-[calc(100vh-24px)] max-w-5xl items-center justify-center">
-        <div className="w-full max-h-[calc(100vh-24px)] overflow-auto rounded-[28px] border border-white/70 bg-white/95 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur md:grid md:grid-cols-[0.94fr_1.06fr] md:overflow-hidden">
-          <section className="relative hidden overflow-hidden border-r border-slate-200/70 bg-[linear-gradient(180deg,#fffdf7_0%,#fff7e6_48%,#f6f3ff_100%)] p-8 md:flex md:flex-col md:justify-between lg:p-10">
+        <div className="w-full max-h-[calc(100vh-24px)] overflow-auto rounded-[28px] border border-white/20 bg-white/96 shadow-[0_28px_80px_rgba(30,27,75,0.34)] backdrop-blur md:grid md:grid-cols-[0.94fr_1.06fr] md:overflow-hidden">
+          <section className="relative hidden overflow-hidden border-r border-white/10 bg-[linear-gradient(180deg,#1e1b4b_0%,#312e81_42%,#4338ca_100%)] p-8 md:flex md:flex-col md:justify-between lg:p-10">
             <div className="relative z-10">
-              <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm">
+              <div className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold text-indigo-100 shadow-sm backdrop-blur">
                 Lighting up your sales workspace
               </div>
-              <h1 className="mt-5 max-w-sm text-3xl font-black tracking-tight text-slate-900">
+              <h1 className="mt-5 max-w-sm text-3xl font-black tracking-tight text-white">
                 A brighter start for every shift.
               </h1>
-              <p className="mt-3 max-w-sm text-sm leading-6 text-slate-600">
+              <p className="mt-3 max-w-sm text-sm leading-6 text-indigo-100/85">
                 Sign in to open sales, manage customers, and keep your day moving from one clean workspace.
               </p>
             </div>
@@ -128,30 +128,30 @@ export default function Login() {
               <LoginLamp isOn={loading} />
             </div>
 
-            <div className="relative z-10 flex items-center justify-between rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-sm">
+            <div className="relative z-10 flex items-center justify-between rounded-2xl border border-white/10 bg-white/10 px-4 py-3 shadow-sm backdrop-blur">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-100/70">
                   Lamp Status
                 </p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">
+                <p className="mt-1 text-sm font-semibold text-white">
                   {loading ? 'Power on: authenticating...' : 'Power off: waiting for sign in'}
                 </p>
               </div>
               <span
                 className={`h-3.5 w-3.5 rounded-full ${
-                  loading ? 'bg-amber-400 shadow-[0_0_18px_rgba(251,191,36,0.9)]' : 'bg-slate-300'
+                  loading ? 'bg-amber-400 shadow-[0_0_18px_rgba(251,191,36,0.9)]' : 'bg-indigo-200/60'
                 }`}
               />
             </div>
 
-            <div className="absolute left-8 top-8 h-20 w-20 rounded-full bg-white/40 blur-2xl" />
-            <div className="absolute bottom-16 right-10 h-24 w-24 rounded-full bg-amber-100/60 blur-3xl" />
+            <div className="absolute left-8 top-8 h-20 w-20 rounded-full bg-indigo-300/20 blur-2xl" />
+            <div className="absolute bottom-16 right-10 h-24 w-24 rounded-full bg-blue-300/20 blur-3xl" />
           </section>
 
           <section className="flex flex-col justify-center p-6 sm:p-8 lg:px-10 lg:py-9">
             <div className="mx-auto w-full max-w-md">
               <div className="mb-6">
-                <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                <div className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-700">
                   KingKush Sale
                 </div>
                 <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-900">
@@ -180,7 +180,7 @@ export default function Login() {
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                      className="h-12 w-full rounded-xl border border-indigo-100 bg-indigo-50/60 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                       placeholder="Enter username"
                       required
                     />
@@ -197,14 +197,14 @@ export default function Login() {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                      className="h-12 w-full rounded-xl border border-indigo-100 bg-indigo-50/60 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                       placeholder="Enter password"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                      className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-indigo-400 transition-colors hover:bg-indigo-100 hover:text-indigo-700"
                     >
                       {showPassword ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
                     </button>
@@ -214,7 +214,7 @@ export default function Login() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-semibold text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,#312e81_0%,#4338ca_55%,#4f46e5_100%)] text-sm font-semibold text-white shadow-[0_14px_30px_rgba(79,70,229,0.22)] transition-all hover:shadow-[0_18px_34px_rgba(79,70,229,0.28)] disabled:cursor-not-allowed disabled:shadow-none disabled:opacity-60"
                 >
                   {loading ? (
                     <>
@@ -231,17 +231,17 @@ export default function Login() {
               </form>
 
               <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-slate-200" />
-                <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                <div className="h-px flex-1 bg-indigo-100" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-300">
                   Google
                 </span>
-                <div className="h-px flex-1 bg-slate-200" />
+                <div className="h-px flex-1 bg-indigo-100" />
               </div>
 
               <button
                 onClick={handleGoogleLogin}
                 disabled={loading}
-                className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-indigo-100 bg-white text-sm font-semibold text-slate-700 transition-all hover:border-indigo-200 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
                   G
@@ -249,7 +249,7 @@ export default function Login() {
                 Continue with Google
               </button>
 
-              <p className="mt-5 text-center text-[11px] font-medium text-slate-400">
+              <p className="mt-5 text-center text-[11px] font-medium text-indigo-300">
                 (c) 2026 KingKush Sale
               </p>
             </div>
