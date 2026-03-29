@@ -3,6 +3,65 @@ import { readJsonBody } from '../../backend/lib/http.js';
 import { createId, withTransaction } from '../../backend/lib/db.js';
 import { hashPassword } from '../../backend/lib/security.js';
 
+const KNOWN_PERMISSIONS = [
+  'dashboard',
+  'pos',
+  'sales-history',
+  'shifts',
+  'customers',
+  'credits',
+  'products',
+  'categories',
+  'inventory',
+  'purchase-orders',
+  'suppliers',
+  'branches',
+  'labels',
+  'reports',
+  'expenses',
+  'users',
+  'audit-logs',
+  'settings',
+  'status'
+] as const;
+
+const ROLE_PERMISSION_PRESETS: Record<'admin' | 'cashier', string[]> = {
+  cashier: ['dashboard', 'pos', 'sales-history', 'shifts', 'customers', 'credits'],
+  admin: [
+    'dashboard',
+    'pos',
+    'sales-history',
+    'shifts',
+    'customers',
+    'credits',
+    'products',
+    'categories',
+    'inventory',
+    'purchase-orders',
+    'suppliers',
+    'labels',
+    'reports',
+    'expenses',
+    'users'
+  ]
+};
+
+function sanitizePermissions(role: 'admin' | 'cashier', permissions: unknown) {
+  const requestedPermissions = Array.isArray(permissions)
+    ? permissions.filter(
+        (value): value is (typeof KNOWN_PERMISSIONS)[number] =>
+          typeof value === 'string' && KNOWN_PERMISSIONS.includes(value as (typeof KNOWN_PERMISSIONS)[number])
+      )
+    : [];
+
+  const dedupedPermissions = Array.from(new Set(requestedPermissions));
+  if (dedupedPermissions.length > 0) {
+    return dedupedPermissions;
+  }
+
+  return [...ROLE_PERMISSION_PRESETS[role]];
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -29,7 +88,7 @@ export default async function handler(req: any, res: any) {
     const displayName = (body.displayName || '').trim();
     const branchId = (body.branchId || '').trim() || sessionUser.branchId || 'branch_main';
     const requestedRole = body.role || 'cashier';
-    const permissions = Array.isArray(body.permissions) ? body.permissions.filter((value): value is string => typeof value === 'string') : [];
+    const permissions = sanitizePermissions(requestedRole, body.permissions);
 
     if (!username || !password || !displayName) {
       return res.status(400).json({ error: 'Display name, username, and password are required' });

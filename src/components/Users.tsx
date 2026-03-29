@@ -38,18 +38,62 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'status', label: 'System Status' },
 ];
 
-export default function Users() {
-  const { user: currentUser } = useAuth();
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [formData, setFormData] = useState({
+const PERMISSION_LABELS = Object.fromEntries(
+  AVAILABLE_PERMISSIONS.map((permission) => [permission.id, permission.label])
+) as Record<string, string>;
+
+const ROLE_PERMISSION_PRESETS: Record<
+  'admin' | 'cashier',
+  {
+    title: string;
+    description: string;
+    permissions: string[];
+  }
+> = {
+  cashier: {
+    title: 'Frontline Cashier',
+    description: 'Best for checkout staff handling sales, refunds, customer lookup, shift control, and credit follow-up at the till.',
+    permissions: ['dashboard', 'pos', 'sales-history', 'shifts', 'customers', 'credits']
+  },
+  admin: {
+    title: 'Store Operations Admin',
+    description: 'Best for branch supervisors managing products, stock, purchasing, expenses, reports, labels, and cashier accounts.',
+    permissions: [
+      'dashboard',
+      'pos',
+      'sales-history',
+      'shifts',
+      'customers',
+      'credits',
+      'products',
+      'categories',
+      'inventory',
+      'purchase-orders',
+      'suppliers',
+      'labels',
+      'reports',
+      'expenses',
+      'users'
+    ]
+  }
+};
+
+function createUserFormState(currentUser: UserProfile | null | undefined, role: 'admin' | 'cashier' = 'cashier') {
+  return {
     fullName: '',
     username: '',
     password: '',
     branchId: currentUser?.branchId || 'branch_main',
-    role: 'cashier' as 'admin' | 'cashier',
-    permissions: ['dashboard', 'pos', 'shifts'] as string[]
-  });
+    role,
+    permissions: [...ROLE_PERMISSION_PRESETS[role].permissions]
+  };
+}
+
+export default function Users() {
+  const { user: currentUser } = useAuth();
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [formData, setFormData] = useState(() => createUserFormState(currentUser, 'cashier'));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -90,6 +134,14 @@ export default function Users() {
       unsubBranches();
     };
   }, [currentUser]);
+
+  const applyRolePreset = (role: 'admin' | 'cashier') => {
+    setFormData((prev) => ({
+      ...prev,
+      role,
+      permissions: [...ROLE_PERMISSION_PRESETS[role].permissions]
+    }));
+  };
 
   const handleTogglePermission = (id: string) => {
     setFormData(prev => ({
@@ -132,14 +184,7 @@ export default function Users() {
         permissions: formData.permissions
       });
       
-      setFormData({
-        fullName: '',
-        username: '',
-        password: '',
-        branchId: currentUser?.branchId || 'branch_main',
-        role: 'cashier',
-        permissions: ['dashboard', 'pos', 'shifts']
-      });
+      setFormData(createUserFormState(currentUser, 'cashier'));
       toast.success('User created successfully');
     } catch (err: any) {
       console.error('Create user error:', err);
@@ -227,6 +272,8 @@ export default function Users() {
     }
   };
 
+  const selectedPreset = ROLE_PERMISSION_PRESETS[formData.role];
+
   return (
     <div className="space-y-8">
       <ConfirmDialog
@@ -303,12 +350,41 @@ export default function Users() {
                   <label className="text-sm font-medium text-gray-700">Role</label>
                   <select 
                     value={formData.role}
-                    onChange={e => setFormData(prev => ({ ...prev, role: e.target.value as 'admin' | 'cashier' }))}
+                    onChange={e => applyRolePreset(e.target.value as 'admin' | 'cashier')}
                     className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
                   >
                     <option value="cashier">Cashier</option>
-                    <option value="admin">Admin</option>
+                    {currentUser?.role === 'superadmin' && <option value="admin">Admin</option>}
                   </select>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-teal-100 bg-teal-50/70 p-4 space-y-3">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-teal-600">
+                      Recommended Preset
+                    </p>
+                    <p className="text-sm font-bold text-teal-950">{selectedPreset.title}</p>
+                    <p className="text-xs leading-5 text-teal-800/80">{selectedPreset.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => applyRolePreset(formData.role)}
+                    className="inline-flex items-center justify-center rounded-xl border border-teal-200 bg-white px-4 py-2 text-xs font-bold text-teal-700 transition-all hover:bg-teal-100"
+                  >
+                    Reset to Preset
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedPreset.permissions.map((permissionId) => (
+                    <span
+                      key={permissionId}
+                      className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-teal-700 shadow-sm"
+                    >
+                      {PERMISSION_LABELS[permissionId] || permissionId}
+                    </span>
+                  ))}
                 </div>
               </div>
 
