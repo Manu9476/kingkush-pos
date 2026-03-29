@@ -1,0 +1,548 @@
+import { useEffect, useMemo, useState } from 'react';
+import {
+  db,
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  where,
+  toDate,
+  handleFirestoreError,
+  OperationType
+} from '../data';
+import type { Branch, CashMovement, CashShift } from '../types';
+import {
+  closeShift,
+  getShiftStatus,
+  openShift,
+  recordCashMovement
+} from '../services/platformApi';
+import { Banknote, Clock3, LockOpen, Lock, ArrowDownUp, ShieldCheck } from 'lucide-react';
+import { toast } from 'sonner';
+
+type LiveShiftSummary = {
+  shiftId: string;
+  branchId: string | null;
+  openingFloat: number;
+  cashSales: number;
+  cashCreditPayments: number;
+  manualCashIn: number;
+  manualCashOut: number;
+  expectedCash: number;
+  countedCash: number | null;
+  variance: number | null;
+} | null;
+
+const CASH_MOVEMENT_TYPES = [
+  { id: 'cash-in', label: 'Cash In' },
+  { id: 'cash-out', label: 'Cash Out' },
+  { id: 'float-add', label: 'Add Float' },
+  { id: 'safe-drop', label: 'Safe Drop' }
+] as const;
+
+export default function CashShifts() {
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [recentShifts, setRecentShifts] = useState<CashShift[]>([]);
+  const [currentShift, setCurrentShift] = useState<CashShift | null>(null);
+  const [liveSummary, setLiveSummary] = useState<LiveShiftSummary>(null);
+  const [movements, setMovements] = useState<CashMovement[]>([]);
+
+  const [openForm, setOpenForm] = useState({
+    openingFloat: '0',
+    notes: '',
+    openingReference: ''
+  });
+  const [movementForm, setMovementForm] = useState({
+    type: 'cash-out' as 'cash-in' | 'cash-out' | 'float-add' | 'safe-drop',
+    amount: '',
+    reason: '',
+    reference: ''
+  });
+  const [closeForm, setCloseForm] = useState({
+    closingCountedCash: '',
+    notes: ''
+  });
+
+  const [isOpening, setIsOpening] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isRecordingMovement, setIsRecordingMovement] = useState(false);
+
+  const refreshShiftStatus = async () => {
+    try {
+      const payload = await getShiftStatus();
+      setCurrentShift(payload.shift);
+      setLiveSummary(payload.summary);
+      if (payload.summary && closeForm.closingCountedCash === '') {
+        setCloseForm((current) => ({
+          ...current,
+          closingCountedCash: String(Math.round(payload.summary.expectedCash))
+        }));
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('Authentication')) {
+        return;
+      }
+      toast.error(error.message || 'Unable to load shift status');
+    }
+  };
+
+  useEffect(() => {
+    void refreshShiftStatus();
+    const intervalId = window.setInterval(() => {
+      void refreshShiftStatus();
+    }, 10000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const unsubBranches = onSnapshot(
+      collection(db, 'branches'),
+      (snapshot) => {
+        setBranches(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as Branch)));
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'branches')
+    );
+
+    const unsubShifts = onSnapshot(
+      query(collection(db, 'cash_shifts'), orderBy('openedAt', 'desc')),
+      (snapshot) => {
+        setRecentShifts(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as CashShift)).slice(0, 20));
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'cash_shifts')
+    );
+
+    return () => {
+      unsubBranches();
+      unsubShifts();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentShift?.id) {
+      setMovements([]);
+      return;
+    }
+
+    const unsubMovements = onSnapshot(
+      query(collection(db, 'cash_movements'), where('shiftId', '==', currentShift.id), orderBy('timestamp', 'desc')),
+      (snapshot) => {
+        setMovements(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as CashMovement)));
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'cash_movements')
+    );
+
+    return () => unsubMovements();
+  }, [currentShift?.id]);
+
+  const currentBranchName = useMemo(() => {
+    if (!currentShift?.branchId) {
+      return 'Unassigned branch';
+    }
+    return branches.find((branch) => branch.id === currentShift.branchId)?.name || currentShift.branchId;
+  }, [branches, currentShift?.branchId]);
+
+  const handleOpenShift = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsOpening(true);
+    try {
+      await openShift({
+        openingFloat: Number(openForm.openingFloat || 0),
+        notes: openForm.notes.trim(),
+        openingReference: openForm.openingReference.trim()
+      });
+      toast.success('Cashier shift opened');
+      setOpenForm({ openingFloat: '0', notes: '', openingReference: '' });
+      await refreshShiftStatus();
+    } catch (error: any) {
+      toast.error(error.message || 'Unable to open shift');
+    } finally {
+      setIsOpening(false);
+    }
+  };
+
+  const handleRecordMovement = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsRecordingMovement(true);
+    try {
+      await recordCashMovement({
+        type: movementForm.type,
+        amount: Number(movementForm.amount || 0),
+        reason: movementForm.reason.trim(),
+        reference: movementForm.reference.trim()
+      });
+      toast.success('Cash movement recorded');
+      setMovementForm({
+        type: 'cash-out',
+        amount: '',
+        reason: '',
+        reference: ''
+      });
+      await refreshShiftStatus();
+    } catch (error: any) {
+      toast.error(error.message || 'Unable to record movement');
+    } finally {
+      setIsRecordingMovement(false);
+    }
+  };
+
+  const handleCloseShift = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsClosing(true);
+    try {
+      await closeShift({
+        closingCountedCash: Number(closeForm.closingCountedCash || 0),
+        notes: closeForm.notes.trim()
+      });
+      toast.success('Cashier shift closed');
+      setCloseForm({ closingCountedCash: '', notes: '' });
+      await refreshShiftStatus();
+    } catch (error: any) {
+      toast.error(error.message || 'Unable to close shift');
+    } finally {
+      setIsClosing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-bold text-gray-900">Cashier Shifts</h1>
+        <p className="text-sm text-gray-500">Open tills, track cash movements, and close each shift with proper reconciliation.</p>
+      </div>
+
+      {!currentShift ? (
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-8 py-6 border-b border-gray-50">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                <LockOpen className="h-6 w-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Open a cashier shift</h2>
+                <p className="text-sm text-gray-500">No active shift detected. Sales and cash reconciliation should start with an opening float.</p>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleOpenShift} className="p-8 grid grid-cols-1 md:grid-cols-3 gap-5">
+            <label className="space-y-2">
+              <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Opening Float</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={openForm.openingFloat}
+                onChange={(event) => setOpenForm((current) => ({ ...current, openingFloat: event.target.value }))}
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Reference</span>
+              <input
+                value={openForm.openingReference}
+                onChange={(event) => setOpenForm((current) => ({ ...current, openingReference: event.target.value }))}
+                placeholder="Float source or supervisor reference"
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Opening Note</span>
+              <input
+                value={openForm.notes}
+                onChange={(event) => setOpenForm((current) => ({ ...current, notes: event.target.value }))}
+                placeholder="Optional note"
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+              />
+            </label>
+            <div className="md:col-span-3">
+              <button
+                type="submit"
+                disabled={isOpening}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 font-bold text-white transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <LockOpen className="h-4 w-4" />
+                {isOpening ? 'Opening...' : 'Open Shift'}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <>
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-8 py-6 border-b border-gray-50 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                  <h2 className="text-xl font-bold text-gray-900">Active Shift</h2>
+                </div>
+                <p className="mt-1 text-sm text-gray-500">
+                  {currentBranchName} • Opened {toDate(currentShift.openedAt).toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                Shift #{currentShift.id.slice(-8).toUpperCase()}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-5 p-8">
+              <MetricCard label="Opening Float" value={liveSummary?.openingFloat || 0} tone="indigo" />
+              <MetricCard label="Cash Sales" value={liveSummary?.cashSales || 0} tone="emerald" />
+              <MetricCard label="Credit Cash-In" value={liveSummary?.cashCreditPayments || 0} tone="blue" />
+              <MetricCard label="Manual In" value={liveSummary?.manualCashIn || 0} tone="amber" />
+              <MetricCard label="Manual Out" value={liveSummary?.manualCashOut || 0} tone="rose" />
+            </div>
+
+            <div className="px-8 pb-8">
+              <div className="rounded-3xl bg-indigo-950 px-6 py-5 text-white">
+                <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-200">Expected Drawer Cash</p>
+                <p className="mt-2 text-4xl font-black">KES {(liveSummary?.expectedCash || 0).toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[0.98fr_1.02fr] gap-8">
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-8 py-6 border-b border-gray-50">
+                <div className="flex items-center gap-3">
+                  <ArrowDownUp className="h-5 w-5 text-indigo-600" />
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Cash Movements</h2>
+                    <p className="text-sm text-gray-500">Record drops, extra float, and cash pulled from the till.</p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleRecordMovement} className="p-8 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label className="space-y-2">
+                    <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Movement Type</span>
+                    <select
+                      value={movementForm.type}
+                      onChange={(event) => setMovementForm((current) => ({ ...current, type: event.target.value as typeof movementForm.type }))}
+                      className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                    >
+                      {CASH_MOVEMENT_TYPES.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Amount</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={movementForm.amount}
+                      onChange={(event) => setMovementForm((current) => ({ ...current, amount: event.target.value }))}
+                      className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                    />
+                  </label>
+                </div>
+
+                <label className="space-y-2 block">
+                  <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Reason</span>
+                  <input
+                    value={movementForm.reason}
+                    onChange={(event) => setMovementForm((current) => ({ ...current, reason: event.target.value }))}
+                    placeholder="Why is cash moving in or out?"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  />
+                </label>
+
+                <label className="space-y-2 block">
+                  <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Reference</span>
+                  <input
+                    value={movementForm.reference}
+                    onChange={(event) => setMovementForm((current) => ({ ...current, reference: event.target.value }))}
+                    placeholder="Optional voucher or approval reference"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={isRecordingMovement}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 font-bold text-white transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Banknote className="h-4 w-4" />
+                  {isRecordingMovement ? 'Recording...' : 'Record Movement'}
+                </button>
+              </form>
+
+              <div className="border-t border-gray-50 px-8 py-6 space-y-3 max-h-[340px] overflow-y-auto">
+                {movements.length === 0 ? (
+                  <p className="text-sm text-gray-400">No cash movements recorded on this shift yet.</p>
+                ) : (
+                  movements.map((movement) => (
+                    <div key={movement.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-gray-900">{movement.reason}</p>
+                          <p className="text-xs text-gray-500">
+                            {movement.type} • {toDate(movement.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                        <p className="text-sm font-black text-gray-900">KES {movement.amount.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-8 py-6 border-b border-gray-50">
+                <div className="flex items-center gap-3">
+                  <Lock className="h-5 w-5 text-indigo-600" />
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Close Shift & Reconcile</h2>
+                    <p className="text-sm text-gray-500">Count the drawer and compare it against expected system cash.</p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleCloseShift} className="p-8 space-y-5">
+                <div className="rounded-3xl bg-gray-50 p-5 border border-gray-100">
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-500">Expected Cash</p>
+                  <p className="mt-2 text-3xl font-black text-gray-900">KES {(liveSummary?.expectedCash || 0).toLocaleString()}</p>
+                </div>
+
+                <label className="space-y-2 block">
+                  <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Counted Cash in Drawer</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={closeForm.closingCountedCash}
+                    onChange={(event) => setCloseForm((current) => ({ ...current, closingCountedCash: event.target.value }))}
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  />
+                </label>
+
+                <label className="space-y-2 block">
+                  <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Closing Note</span>
+                  <textarea
+                    value={closeForm.notes}
+                    onChange={(event) => setCloseForm((current) => ({ ...current, notes: event.target.value }))}
+                    placeholder="Explain shortages, overages, or special cash events"
+                    className="min-h-28 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  />
+                </label>
+
+                <div className="rounded-3xl border border-dashed border-indigo-200 bg-indigo-50 px-5 py-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-indigo-600">Projected Variance</p>
+                  <p className="mt-2 text-2xl font-black text-indigo-900">
+                    KES {(
+                      Number(closeForm.closingCountedCash || 0) - Number(liveSummary?.expectedCash || 0)
+                    ).toLocaleString()}
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isClosing}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-6 py-3 font-bold text-white transition-all hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Lock className="h-4 w-4" />
+                  {isClosing ? 'Closing...' : 'Close Shift'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-8 py-6 border-b border-gray-50 flex items-center gap-3">
+          <Clock3 className="h-5 w-5 text-indigo-600" />
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Recent Shift History</h2>
+            <p className="text-sm text-gray-500">Review the last shift closings and spot over/short trends quickly.</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50/70 text-left">
+              <tr>
+                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Shift</th>
+                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Branch</th>
+                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Opened</th>
+                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Expected</th>
+                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Counted</th>
+                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Variance</th>
+                <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {recentShifts.map((shift) => {
+                const branchName = branches.find((branch) => branch.id === shift.branchId)?.name || shift.branchId || 'Unassigned';
+                return (
+                  <tr key={shift.id}>
+                    <td className="px-8 py-5">
+                      <p className="text-sm font-bold text-gray-900">#{shift.id.slice(-8).toUpperCase()}</p>
+                      <p className="text-xs text-gray-500">{shift.userName}</p>
+                    </td>
+                    <td className="px-8 py-5 text-sm text-gray-600">{branchName}</td>
+                    <td className="px-8 py-5 text-sm text-gray-600">{toDate(shift.openedAt).toLocaleString()}</td>
+                    <td className="px-8 py-5 text-sm font-semibold text-gray-900">
+                      {shift.expectedCash === undefined ? 'Open' : `KES ${shift.expectedCash.toLocaleString()}`}
+                    </td>
+                    <td className="px-8 py-5 text-sm font-semibold text-gray-900">
+                      {shift.closingCountedCash === undefined ? 'Open' : `KES ${shift.closingCountedCash.toLocaleString()}`}
+                    </td>
+                    <td className="px-8 py-5 text-sm font-black">
+                      <span className={(shift.variance || 0) === 0 ? 'text-emerald-600' : (shift.variance || 0) > 0 ? 'text-blue-600' : 'text-red-600'}>
+                        {shift.variance === undefined ? 'Open' : `KES ${shift.variance.toLocaleString()}`}
+                      </span>
+                    </td>
+                    <td className="px-8 py-5">
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] ${shift.status === 'open' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-600'}`}>
+                        {shift.status}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {recentShifts.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-8 py-14 text-center text-sm text-gray-400">
+                    No shift history yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  tone
+}: {
+  label: string;
+  value: number;
+  tone: 'indigo' | 'emerald' | 'blue' | 'amber' | 'rose';
+}) {
+  const toneMap = {
+    indigo: 'bg-indigo-50 text-indigo-700',
+    emerald: 'bg-emerald-50 text-emerald-700',
+    blue: 'bg-blue-50 text-blue-700',
+    amber: 'bg-amber-50 text-amber-700',
+    rose: 'bg-rose-50 text-rose-700'
+  } as const;
+
+  return (
+    <div className={`rounded-3xl border border-white/70 px-5 py-4 ${toneMap[tone]}`}>
+      <p className="text-xs font-bold uppercase tracking-[0.22em]">{label}</p>
+      <p className="mt-3 text-2xl font-black">KES {value.toLocaleString()}</p>
+    </div>
+  );
+}

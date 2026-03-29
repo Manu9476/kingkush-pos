@@ -19,6 +19,7 @@ export default async function handler(req: any, res: any) {
       username?: string;
       password?: string;
       displayName?: string;
+      branchId?: string;
       role?: 'admin' | 'cashier';
       permissions?: string[];
     }>(req);
@@ -26,6 +27,7 @@ export default async function handler(req: any, res: any) {
     const username = (body.username || '').trim().toLowerCase();
     const password = (body.password || '').trim();
     const displayName = (body.displayName || '').trim();
+    const branchId = (body.branchId || '').trim() || sessionUser.branchId || 'branch_main';
     const requestedRole = body.role || 'cashier';
     const permissions = Array.isArray(body.permissions) ? body.permissions.filter((value): value is string => typeof value === 'string') : [];
 
@@ -48,6 +50,14 @@ export default async function handler(req: any, res: any) {
         throw new Error('Username already exists');
       }
 
+      const branchResult = await client.query<{ id: string }>(
+        'SELECT id FROM branches WHERE id = $1 LIMIT 1',
+        [branchId]
+      );
+      if (!branchResult.rows[0]) {
+        throw new Error('Selected branch was not found');
+      }
+
       const userId = createId('usr');
       const email = `${username}@kingkush.local`;
       const passwordHash = await hashPassword(password);
@@ -59,15 +69,16 @@ export default async function handler(req: any, res: any) {
           username,
           email,
           display_name,
+          branch_id,
           role,
           permissions,
           status,
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'active', NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 'active', NOW(), NOW())
         `,
-        [userId, username, email, displayName, requestedRole, JSON.stringify(permissions)]
+        [userId, username, email, displayName, branchId, requestedRole, JSON.stringify(permissions)]
       );
 
       await client.query(
@@ -96,6 +107,7 @@ export default async function handler(req: any, res: any) {
         username,
         email,
         displayName,
+        branchId,
         role: requestedRole,
         permissions,
         status: 'active' as const,

@@ -9,7 +9,7 @@ import {
   handleFirestoreError,
   OperationType,
 } from '../data';
-import { UserProfile } from '../types';
+import { Branch, UserProfile } from '../types';
 import { useAuth } from '../App';
 import { User, Lock, CheckCircle2, XCircle, Key, Trash2, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'pos', label: 'Sale' },
   { id: 'sales-history', label: 'Sales History' },
+  { id: 'shifts', label: 'Cash Shifts' },
   { id: 'customers', label: 'Customers' },
   { id: 'credits', label: 'Credits' },
   { id: 'products', label: 'Products' },
@@ -27,6 +28,7 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'inventory', label: 'Inventory' },
   { id: 'purchase-orders', label: 'Purchase Orders' },
   { id: 'suppliers', label: 'Suppliers' },
+  { id: 'branches', label: 'Branches' },
   { id: 'labels', label: 'Labels' },
   { id: 'reports', label: 'Reports' },
   { id: 'expenses', label: 'Expenses' },
@@ -39,12 +41,14 @@ const AVAILABLE_PERMISSIONS = [
 export default function Users() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [formData, setFormData] = useState({
     fullName: '',
     username: '',
     password: '',
+    branchId: currentUser?.branchId || 'branch_main',
     role: 'cashier' as 'admin' | 'cashier',
-    permissions: ['dashboard', 'pos'] as string[]
+    permissions: ['dashboard', 'pos', 'shifts'] as string[]
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +80,15 @@ export default function Users() {
       (snapshot) => setUsers(snapshot.docs.map(doc => ({ ...doc.data() } as UserProfile))),
       (err) => handleFirestoreError(err, OperationType.LIST, 'users')
     );
-    return () => unsub();
+    const unsubBranches = onSnapshot(
+      collection(db, 'branches'),
+      (snapshot) => setBranches(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as Branch))),
+      (err) => handleFirestoreError(err, OperationType.LIST, 'branches')
+    );
+    return () => {
+      unsub();
+      unsubBranches();
+    };
   }, [currentUser]);
 
   const handleTogglePermission = (id: string) => {
@@ -115,6 +127,7 @@ export default function Users() {
         username: formData.username.toLowerCase(),
         password: formData.password,
         displayName: formData.fullName,
+        branchId: formData.branchId,
         role: formData.role,
         permissions: formData.permissions
       });
@@ -123,8 +136,9 @@ export default function Users() {
         fullName: '',
         username: '',
         password: '',
+        branchId: currentUser?.branchId || 'branch_main',
         role: 'cashier',
-        permissions: ['dashboard', 'pos']
+        permissions: ['dashboard', 'pos', 'shifts']
       });
       toast.success('User created successfully');
     } catch (err: any) {
@@ -141,6 +155,17 @@ export default function Users() {
       await updateDoc(doc(db, 'users', u.uid), {
         status: u.status === 'active' ? 'inactive' : 'active'
       });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'users');
+    }
+  };
+
+  const updateUserBranch = async (u: UserProfile, branchId: string) => {
+    try {
+      await updateDoc(doc(db, 'users', u.uid), {
+        branchId
+      });
+      toast.success('Branch updated');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'users');
     }
@@ -287,6 +312,21 @@ export default function Users() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Branch</label>
+                <select
+                  value={formData.branchId}
+                  onChange={e => setFormData(prev => ({ ...prev, branchId: e.target.value }))}
+                  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                >
+                  {branches.map(branch => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name} ({branch.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="space-y-3">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-teal-600" />
@@ -339,6 +379,7 @@ export default function Users() {
                     <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Name</th>
                     <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Username</th>
                     <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Role</th>
+                    <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Branch</th>
                     <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Status</th>
                     <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">Action</th>
                   </tr>
@@ -365,6 +406,19 @@ export default function Users() {
                         }`}>
                           {u.role}
                         </span>
+                      </td>
+                      <td className="px-8 py-6">
+                        <select
+                          value={u.branchId || 'branch_main'}
+                          onChange={(event) => updateUserBranch(u, event.target.value)}
+                          className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-teal-500"
+                        >
+                          {branches.map(branch => (
+                            <option key={branch.id} value={branch.id}>
+                              {branch.name}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-8 py-6">
                         <div className="flex items-center gap-2">

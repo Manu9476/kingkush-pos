@@ -2,6 +2,7 @@ import { requirePermission } from '../_lib/auth';
 import { insertAuditLog } from '../_lib/audit';
 import { createId, withTransaction } from '../_lib/db';
 import { readJsonBody } from '../_lib/http';
+import { getOpenShift, resolveBranchId } from '../_lib/operations';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -32,6 +33,11 @@ export default async function handler(req: any, res: any) {
     }
 
     const result = await withTransaction(async (client) => {
+      const openShift = await getOpenShift(client, user.uid);
+      if (!openShift) {
+        throw new Error('An open cashier shift is required before recording a credit payment');
+      }
+      const branchId = openShift.branch_id || await resolveBranchId(client, user);
       const creditResult = await client.query<{
         id: string;
         sale_id: string;
@@ -74,9 +80,11 @@ export default async function handler(req: any, res: any) {
           reference,
           cashier_id,
           cashier_name,
+          branch_id,
+          shift_id,
           paid_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz)
         `,
         [
           paymentId,
@@ -88,6 +96,8 @@ export default async function handler(req: any, res: any) {
           reference,
           user.uid,
           user.displayName || user.username,
+          branchId,
+          openShift.id,
           paidAt
         ]
       );
@@ -129,7 +139,7 @@ export default async function handler(req: any, res: any) {
 
       await insertAuditLog(
         client,
-        user,
+        { ...user, branchId },
         'SETTLE_CREDIT',
         `Recorded KES ${amountPaid.toLocaleString()} for credit ${credit.id}`
       );
@@ -145,6 +155,8 @@ export default async function handler(req: any, res: any) {
           reference,
           cashierId: user.uid,
           cashierName: user.displayName || user.username,
+          branchId,
+          shiftId: openShift.id,
           timestamp: paidAt
         }
       };
@@ -153,7 +165,12 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown server error';
-    const statusCode = message.includes('selected credit') || message.includes('cannot exceed') ? 400 : 500;
+    const statusCode =
+      message.includes('selected credit') || message.includes('cannot exceed')
+        ? 400
+        : message.includes('open cashier shift')
+          ? 409
+          : 500;
     return res.status(statusCode).json({ error: message });
   }
 }

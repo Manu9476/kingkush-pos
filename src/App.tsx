@@ -28,7 +28,9 @@ import {
   Users as UsersIcon,
   FolderTree,
   Receipt,
-  History as HistoryIcon
+  History as HistoryIcon,
+  Banknote,
+  Building2
 } from 'lucide-react';
 
 import Dashboard from './components/Dashboard';
@@ -50,6 +52,8 @@ import Expenses from './components/Expenses';
 import SalesHistory from './components/SalesHistory';
 import AuditLogs from './components/AuditLogs';
 import PurchaseOrders from './components/PurchaseOrders';
+import CashShifts from './components/CashShifts';
+import Branches from './components/Branches';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -129,6 +133,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     { id: 'dashboard', label: 'Dashboard', path: '/', icon: LayoutDashboard },
     { id: 'pos', label: 'Sale', path: '/pos', icon: ShoppingCart },
     { id: 'sales-history', label: 'Sales History', path: '/sales-history', icon: Receipt },
+    { id: 'shifts', label: 'Cash Shifts', path: '/cash-shifts', icon: Banknote },
     { id: 'customers', label: 'Customers', path: '/customers', icon: UsersIcon },
     { id: 'credits', label: 'Credits', path: '/credits', icon: CreditCard },
     { id: 'products', label: 'Products', path: '/products', icon: Package },
@@ -136,6 +141,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     { id: 'inventory', label: 'Inventory', path: '/inventory', icon: ClipboardList },
     { id: 'purchase-orders', label: 'Purchase Orders', path: '/purchase-orders', icon: Truck },
     { id: 'suppliers', label: 'Suppliers', path: '/suppliers', icon: Truck },
+    { id: 'branches', label: 'Branches', path: '/branches', icon: Building2 },
     { id: 'labels', label: 'Labels', path: '/labels', icon: Tag },
     { id: 'reports', label: 'Reports', path: '/reports', icon: BarChart3 },
     { id: 'expenses', label: 'Expenses', path: '/expenses', icon: Receipt },
@@ -327,9 +333,11 @@ export default function App() {
     const routePriority: Array<{ permission: string; path: string }> = [
       { permission: 'dashboard', path: '/' },
       { permission: 'pos', path: '/pos' },
+      { permission: 'shifts', path: '/cash-shifts' },
       { permission: 'credits', path: '/credits' },
       { permission: 'products', path: '/products' },
       { permission: 'inventory', path: '/inventory' },
+      { permission: 'branches', path: '/branches' },
       { permission: 'labels', path: '/labels' },
       { permission: 'reports', path: '/reports' },
       { permission: 'expenses', path: '/expenses' },
@@ -393,6 +401,7 @@ export default function App() {
                   <Route path="/" element={hasPermission('dashboard') ? <Dashboard /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="/pos" element={hasPermission('pos') ? <POS /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="/sales-history" element={hasPermission('pos') ? <SalesHistory /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/cash-shifts" element={hasPermission('shifts') || hasPermission('pos') ? <CashShifts /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="/customers" element={hasPermission('pos') ? <Customers /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="/credits" element={hasPermission('credits') ? <Credits /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="/products" element={hasPermission('products') ? <Products /> : <Navigate to={defaultAuthorizedPath} replace />} />
@@ -400,6 +409,7 @@ export default function App() {
                   <Route path="/inventory" element={hasPermission('inventory') ? <Inventory /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="/purchase-orders" element={hasPermission('inventory') ? <PurchaseOrders /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="/suppliers" element={hasPermission('inventory') ? <Suppliers /> : <Navigate to={defaultAuthorizedPath} replace />} />
+                  <Route path="/branches" element={hasPermission('branches') ? <Branches /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="/labels" element={hasPermission('labels') ? <Labels /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="/users" element={hasPermission('users') ? <Users /> : <Navigate to={defaultAuthorizedPath} replace />} />
                   <Route path="/audit-logs" element={hasPermission('audit-logs') ? <AuditLogs /> : <Navigate to={defaultAuthorizedPath} replace />} />

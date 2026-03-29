@@ -8,6 +8,7 @@ export type SessionUser = {
   username: string;
   email: string;
   displayName: string;
+  branchId?: string | null;
   role: 'superadmin' | 'admin' | 'cashier';
   permissions: string[];
   status: 'active' | 'inactive';
@@ -30,6 +31,7 @@ type UserRow = {
   username: string;
   email: string;
   display_name: string;
+  branch_id?: string | null;
   role: SessionUser['role'];
   permissions: unknown;
   status: SessionUser['status'];
@@ -42,6 +44,7 @@ export function serializeUser(row: UserRow): SessionUser {
     username: row.username,
     email: row.email,
     displayName: row.display_name,
+    branchId: row.branch_id ?? null,
     role: row.role,
     permissions: normalizePermissions(row.permissions),
     status: row.status,
@@ -67,6 +70,7 @@ export async function getSessionUser(req: RequestLike, res?: ResponseLike, clien
       u.username,
       u.email,
       u.display_name,
+      u.branch_id,
       u.role,
       u.permissions,
       u.status,

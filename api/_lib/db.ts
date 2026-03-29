@@ -11,6 +11,7 @@ const DEFAULT_PERMISSIONS = [
   'dashboard',
   'pos',
   'sales-history',
+  'shifts',
   'customers',
   'credits',
   'products',
@@ -18,6 +19,7 @@ const DEFAULT_PERMISSIONS = [
   'inventory',
   'purchase-orders',
   'suppliers',
+  'branches',
   'labels',
   'reports',
   'expenses',
@@ -145,6 +147,19 @@ async function ensureSchemaInternal() {
         bad_debt_threshold_days INTEGER NOT NULL DEFAULT 30,
         tax_rate NUMERIC(10, 2) NOT NULL DEFAULT 16,
         loyalty_point_rate INTEGER NOT NULL DEFAULT 100,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+      `,
+      `
+      CREATE TABLE IF NOT EXISTS branches (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        address TEXT,
+        phone TEXT,
+        email TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
       `,
@@ -299,6 +314,41 @@ async function ensureSchemaInternal() {
       )
       `,
       `
+      CREATE TABLE IF NOT EXISTS cash_shifts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_name TEXT NOT NULL,
+        branch_id TEXT,
+        opening_float NUMERIC(14, 2) NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'open',
+        notes TEXT,
+        opening_reference TEXT,
+        closing_notes TEXT,
+        closing_counted_cash NUMERIC(14, 2),
+        expected_cash NUMERIC(14, 2),
+        variance NUMERIC(14, 2),
+        closed_by_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        closed_by_name TEXT,
+        opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        closed_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+      `,
+      `
+      CREATE TABLE IF NOT EXISTS cash_movements (
+        id TEXT PRIMARY KEY,
+        shift_id TEXT NOT NULL REFERENCES cash_shifts(id) ON DELETE CASCADE,
+        branch_id TEXT,
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        user_name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        amount NUMERIC(14, 2) NOT NULL DEFAULT 0,
+        reason TEXT NOT NULL,
+        reference TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+      `,
+      `
       CREATE OR REPLACE FUNCTION assert_true(condition BOOLEAN, message TEXT)
       RETURNS VOID AS $$
       BEGIN
@@ -308,13 +358,37 @@ async function ensureSchemaInternal() {
       END;
       $$ LANGUAGE plpgsql
       `,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS branch_id TEXT`,
+      `ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS business_name TEXT NOT NULL DEFAULT 'KingKush Sale'`,
+      `ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS store_address TEXT`,
+      `ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS store_phone TEXT`,
+      `ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS store_email TEXT`,
+      `ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS receipt_header TEXT NOT NULL DEFAULT 'Thank you for shopping with us!'`,
+      `ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS receipt_footer TEXT NOT NULL DEFAULT 'Goods once sold are not returnable.'`,
+      `ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS receipt_auto_print BOOLEAN NOT NULL DEFAULT FALSE`,
+      `ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS barcode_autofocus BOOLEAN NOT NULL DEFAULT TRUE`,
+      `ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS barcode_submit_delay_ms INTEGER NOT NULL DEFAULT 120`,
+      `ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS default_branch_id TEXT`,
+      `ALTER TABLE sales ADD COLUMN IF NOT EXISTS branch_id TEXT`,
+      `ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id TEXT`,
+      `ALTER TABLE sales ADD COLUMN IF NOT EXISTS tender_method TEXT`,
+      `ALTER TABLE credit_payments ADD COLUMN IF NOT EXISTS branch_id TEXT`,
+      `ALTER TABLE credit_payments ADD COLUMN IF NOT EXISTS shift_id TEXT`,
+      `ALTER TABLE inventory_ledger ADD COLUMN IF NOT EXISTS branch_id TEXT`,
+      `ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS branch_id TEXT`,
       `CREATE INDEX IF NOT EXISTS idx_sales_sold_at ON sales (sold_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_sales_shift_id ON sales (shift_id)`,
       `CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items (sale_id)`,
       `CREATE INDEX IF NOT EXISTS idx_credits_customer_id ON credits (customer_id)`,
       `CREATE INDEX IF NOT EXISTS idx_credits_status ON credits (status)`,
       `CREATE INDEX IF NOT EXISTS idx_credit_payments_credit_id ON credit_payments (credit_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_credit_payments_shift_id ON credit_payments (shift_id)`,
       `CREATE INDEX IF NOT EXISTS idx_inventory_ledger_product_id ON inventory_ledger (product_id, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_cash_shifts_user_status ON cash_shifts (user_id, status, opened_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_cash_shifts_branch_status ON cash_shifts (branch_id, status, opened_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_cash_movements_shift_id ON cash_movements (shift_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_branches_status ON branches (status, name)`,
       `CREATE INDEX IF NOT EXISTS idx_app_documents_collection_updated_at ON app_documents (collection_name, updated_at DESC)`
     ];
 
@@ -322,12 +396,36 @@ async function ensureSchemaInternal() {
       await client.query(statement);
     }
 
+    await ensureDefaultBranch(client);
     await ensureDefaultSettings(client);
+    await ensureUsersHaveDefaultBranch(client);
     await maybeBootstrapSuperAdmin(client);
     await maybeMigrateLegacyStore(client);
+    await ensureDefaultSettings(client);
+    await ensureUsersHaveDefaultBranch(client);
   } finally {
     client.release();
   }
+}
+
+async function ensureDefaultBranch(client: PoolClient) {
+  await client.query(
+    `
+    INSERT INTO branches (
+      id,
+      code,
+      name,
+      address,
+      phone,
+      email,
+      status,
+      created_at,
+      updated_at
+    )
+    VALUES ('branch_main', 'MAIN', 'Main Branch', '', '', '', 'active', NOW(), NOW())
+    ON CONFLICT (id) DO NOTHING
+    `
+  );
 }
 
 async function ensureDefaultSettings(client: PoolClient) {
@@ -339,10 +437,52 @@ async function ensureDefaultSettings(client: PoolClient) {
       bad_debt_threshold_days,
       tax_rate,
       loyalty_point_rate,
+      business_name,
+      store_address,
+      store_phone,
+      store_email,
+      receipt_header,
+      receipt_footer,
+      receipt_auto_print,
+      barcode_autofocus,
+      barcode_submit_delay_ms,
+      default_branch_id,
       updated_at
     )
-    VALUES ('system', 'KK-', 30, 16, 100, NOW())
-    ON CONFLICT (id) DO NOTHING
+    VALUES (
+      'system',
+      'KK-',
+      30,
+      16,
+      100,
+      'KingKush Sale',
+      '',
+      '',
+      '',
+      'Thank you for shopping with us!',
+      'Goods once sold are not returnable.',
+      FALSE,
+      TRUE,
+      120,
+      'branch_main',
+      NOW()
+    )
+    ON CONFLICT (id) DO UPDATE
+    SET
+      business_name = COALESCE(NULLIF(system_settings.business_name, ''), EXCLUDED.business_name),
+      receipt_header = COALESCE(NULLIF(system_settings.receipt_header, ''), EXCLUDED.receipt_header),
+      receipt_footer = COALESCE(NULLIF(system_settings.receipt_footer, ''), EXCLUDED.receipt_footer),
+      default_branch_id = COALESCE(system_settings.default_branch_id, EXCLUDED.default_branch_id)
+    `
+  );
+}
+
+async function ensureUsersHaveDefaultBranch(client: PoolClient) {
+  await client.query(
+    `
+    UPDATE users
+    SET branch_id = COALESCE(branch_id, 'branch_main')
+    WHERE branch_id IS NULL
     `
   );
 }
@@ -372,13 +512,14 @@ async function maybeBootstrapSuperAdmin(client: PoolClient) {
       username,
       email,
       display_name,
+      branch_id,
       role,
       permissions,
       status,
       created_at,
       updated_at
     )
-    VALUES ($1, $2, $3, $4, 'superadmin', $5::jsonb, 'active', NOW(), NOW())
+    VALUES ($1, $2, $3, $4, 'branch_main', 'superadmin', $5::jsonb, 'active', NOW(), NOW())
     ON CONFLICT (username) DO NOTHING
     `,
     [userId, username, email, displayName, JSON.stringify(DEFAULT_PERMISSIONS)]

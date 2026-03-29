@@ -13,12 +13,13 @@ import {
   toDate
 } from '../data';
 import { Product, Sale, Customer, SystemSettings } from '../types';
+import type { Branch } from '../types';
 import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Printer, X, User as UserIcon, Shield } from 'lucide-react';
 import { useAuth } from '../App';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 
-import { createSale } from '../services/platformApi';
+import { createSale, getShiftStatus } from '../services/platformApi';
 
 export default function POS() {
   const { user } = useAuth();
@@ -32,6 +33,9 @@ export default function POS() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [isScannerFocused, setIsScannerFocused] = useState(true);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [currentShift, setCurrentShift] = useState<any | null>(null);
+  const [shiftSummary, setShiftSummary] = useState<any | null>(null);
   
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
@@ -43,6 +47,7 @@ export default function POS() {
   const [customerSearchResults, setCustomerSearchResults] = useState<Customer[]>([]);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [reference, setReference] = useState('');
+  const [depositMethod, setDepositMethod] = useState<'cash' | 'mpesa' | 'card'>('cash');
   const isManualAmountPaid = useRef(false);
   
   const [quickSearchQuery, setQuickSearchQuery] = useState('');
@@ -97,6 +102,26 @@ export default function POS() {
   }, []);
 
   useEffect(() => {
+    const refreshShiftStatus = async () => {
+      try {
+        const payload = await getShiftStatus();
+        setCurrentShift(payload.shift);
+        setShiftSummary(payload.summary);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error fetching current shift:', error);
+        }
+        setCurrentShift(null);
+        setShiftSummary(null);
+      }
+    };
+
+    void refreshShiftStatus();
+    const intervalId = window.setInterval(refreshShiftStatus, 10000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
     if (!user) return;
 
     const unsubProducts = onSnapshot(collection(db, 'products'), 
@@ -111,9 +136,16 @@ export default function POS() {
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'customers')
     );
+    const unsubBranches = onSnapshot(collection(db, 'branches'),
+      (snapshot) => {
+        setBranches(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as Branch)));
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'branches')
+    );
     return () => {
       unsubProducts();
       unsubCustomers();
+      unsubBranches();
     };
   }, [user]);
 
@@ -211,7 +243,18 @@ export default function POS() {
     };
 
     const handleFocus = () => setIsScannerFocused(true);
-    const handleBlur = () => setIsScannerFocused(false);
+    const handleBlur = () => {
+      setIsScannerFocused(false);
+      window.setTimeout(() => {
+        if (
+          settings?.barcodeAutofocus !== false &&
+          document.activeElement === document.body &&
+          !showReceipt
+        ) {
+          inputRef.current?.focus();
+        }
+      }, 120);
+    };
 
     const input = inputRef.current;
     if (input) {
@@ -227,17 +270,19 @@ export default function POS() {
         input.removeEventListener('blur', handleBlur);
       }
     };
-  }, []);
+  }, [settings?.barcodeAutofocus, showReceipt]);
 
   useEffect(() => {
+    if (settings?.barcodeAutofocus === false || showReceipt) {
+      return;
+    }
     inputRef.current?.focus();
-  }, []);
+  }, [settings?.barcodeAutofocus, showReceipt]);
 
-  const handleScan = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!barcodeInput.trim()) return;
+  const processBarcodeValue = (rawValue: string) => {
+    if (!rawValue.trim()) return;
 
-    let input = barcodeInput.trim();
+    let input = rawValue.trim();
     let multiplier = 1;
 
     // Handle quantity multiplier (e.g., 5*barcode)
@@ -274,6 +319,27 @@ export default function POS() {
     }
     setBarcodeInput('');
   };
+
+  const handleScan = (e: React.FormEvent) => {
+    e.preventDefault();
+    processBarcodeValue(barcodeInput);
+  };
+
+  useEffect(() => {
+    const trimmed = barcodeInput.trim();
+    const submitDelay = Math.max(60, Number(settings?.barcodeSubmitDelayMs ?? 120));
+    const shouldAutoSubmit = trimmed.length >= 5 || trimmed.includes('*');
+
+    if (!shouldAutoSubmit || showReceipt) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      processBarcodeValue(trimmed);
+    }, submitDelay);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [barcodeInput, settings?.barcodeSubmitDelayMs, showReceipt, allProducts]);
 
   const addToCart = (product: Product, quantity: number = 1) => {
     setCart(prev => {
@@ -333,6 +399,13 @@ export default function POS() {
   const taxRate = settings?.taxRate || 0;
   const total = subtotal;
   const taxAmount = (total * taxRate) / 100;
+  const currentBranchName = branches.find((branch) => branch.id === (currentShift?.branchId || settings?.defaultBranchId))?.name || 'Main Branch';
+  const receiptPaymentLabel = (sale: Sale) => {
+    if (sale.paymentMethod === 'credit' && sale.amountPaid > 0) {
+      return `${(sale.tenderMethod || 'cash').toUpperCase()} + CREDIT`;
+    }
+    return (sale.tenderMethod || sale.paymentMethod).toUpperCase();
+  };
 
   useEffect(() => {
     // Reset manual flag when cart is cleared
@@ -349,8 +422,24 @@ export default function POS() {
     }
   }, [paymentMethod, total]);
 
+  useEffect(() => {
+    if (!showReceipt || !lastSale || !settings?.receiptAutoPrint) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      window.print();
+    }, 350);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [showReceipt, lastSale, settings?.receiptAutoPrint]);
+
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+    if (!currentShift) {
+      toast.error('Open a cashier shift before completing sales.');
+      return;
+    }
     if (isNaN(amountPaid) || amountPaid < 0) {
       toast.error('Please enter a valid amount paid.');
       return;
@@ -384,6 +473,7 @@ export default function POS() {
             sellingPrice: item.sellingPrice
           })),
           paymentMethod,
+          tenderMethod: paymentMethod === 'credit' ? (amountPaid > 0 ? depositMethod : 'credit') : paymentMethod,
           amountPaid: amountPaid || 0,
           customerId: customerId && customerId.trim() !== '' ? customerId : undefined,
           customerName: (customerName || '').trim(),
@@ -404,6 +494,7 @@ export default function POS() {
       setCustomerId('');
       setCustomerBalance(0);
       setCustomerSearchQuery('');
+      setDepositMethod('cash');
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, 'sales');
       } finally {
@@ -437,6 +528,28 @@ export default function POS() {
       <div className="flex flex-col gap-1">
         <p className="text-sm text-indigo-600 font-medium">Fast checkout workflow with scanner-first input and real-time totals.</p>
         <h1 className="text-2xl font-bold text-gray-900">New Sale</h1>
+      </div>
+
+      <div className={`rounded-3xl border px-6 py-5 ${currentShift ? 'border-emerald-100 bg-emerald-50' : 'border-amber-100 bg-amber-50'}`}>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className={`text-xs font-bold uppercase tracking-[0.24em] ${currentShift ? 'text-emerald-700' : 'text-amber-700'}`}>
+              {currentShift ? 'Cashier Shift Active' : 'Shift Required'}
+            </p>
+            <p className={`mt-2 text-sm font-semibold ${currentShift ? 'text-emerald-900' : 'text-amber-900'}`}>
+              {currentShift
+                ? `${currentBranchName} • Expected drawer cash KES ${(shiftSummary?.expectedCash || currentShift.openingFloat || 0).toLocaleString()}`
+                : 'Open a cashier shift from the Cash Shifts page before processing sales.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.location.assign('/cash-shifts')}
+            className={`inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold transition-all ${currentShift ? 'bg-white text-emerald-700 hover:bg-emerald-100' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
+          >
+            {currentShift ? 'View Shift Controls' : 'Open Shift Controls'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -624,6 +737,21 @@ export default function POS() {
               </select>
             </div>
 
+            {paymentMethod === 'credit' && amountPaid > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Deposit Method</label>
+                <select
+                  value={depositMethod}
+                  onChange={(e) => setDepositMethod(e.target.value as 'cash' | 'mpesa' | 'card')}
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="mpesa">M-Pesa</option>
+                  <option value="card">Card</option>
+                </select>
+              </div>
+            )}
+
             <div className="space-y-2 relative" ref={customerSearchRef}>
               <div className="flex justify-between items-center">
                 <label className="text-sm font-medium text-gray-700">Customer Search</label>
@@ -740,7 +868,7 @@ export default function POS() {
 
             <button 
               onClick={handleCheckout}
-              disabled={isProcessing || cart.length === 0}
+              disabled={isProcessing || cart.length === 0 || !currentShift}
               className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
             >
               {isProcessing ? (
@@ -776,9 +904,10 @@ export default function POS() {
               {/* Receipt Preview */}
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 font-mono text-[10px] space-y-2 max-w-75 mx-auto shadow-inner">
                 <div className="text-center border-b border-dashed border-gray-300 pb-2 mb-2">
-                  <h4 className="font-bold text-sm uppercase">KingKush Supermarket</h4>
-                  <p>1331-60100-Embu</p>
-                  <p>Tel: +254 701137747</p>
+                  <h4 className="font-bold text-sm uppercase">{settings?.businessName || 'KingKush Sale'}</h4>
+                  {currentBranchName && <p>{currentBranchName}</p>}
+                  {settings?.storeAddress && <p>{settings.storeAddress}</p>}
+                  {settings?.storePhone && <p>Tel: {settings.storePhone}</p>}
                 </div>
                 
                 <div className="flex justify-between">
@@ -786,6 +915,7 @@ export default function POS() {
                   <span>Time: {toDate(lastSale.timestamp).toLocaleTimeString()}</span>
                 </div>
                 <p>Receipt: {lastSale.id.slice(-8).toUpperCase()}</p>
+                {lastSale.shiftId && <p>Shift: {lastSale.shiftId.slice(-6).toUpperCase()}</p>}
                 <p>Cashier: {lastSale.cashierName}</p>
                 {lastSale.customerName && <p>Customer: {lastSale.customerName}</p>}
                 
@@ -818,7 +948,7 @@ export default function POS() {
                     <span>KES {lastSale.totalAmount.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>PAYMENT ({lastSale.paymentMethod.toUpperCase()})</span>
+                    <span>PAYMENT ({receiptPaymentLabel(lastSale)})</span>
                     <span>KES {lastSale.amountPaid.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
@@ -840,10 +970,8 @@ export default function POS() {
                 </div>
 
                 <div className="text-center border-t border-dashed border-gray-300 pt-2 mt-4">
-                  <p className="font-bold text-xs mb-1 uppercase">All goods are inclusive of vat</p>
-                  <p>THANK YOU FOR SHOPPING WITH US!</p>
-                  <p>Goods once sold are not returnable.</p>
-                  <p className="mt-1 text-[8px] opacity-50">Created by Noxira labs(+254 701137747)</p>
+                  <p className="font-bold text-xs mb-1 uppercase">{settings?.receiptHeader || 'Thank you for shopping with us!'}</p>
+                  <p>{settings?.receiptFooter || 'Goods once sold are not returnable.'}</p>
                 </div>
               </div>
 
@@ -871,9 +999,10 @@ export default function POS() {
       {showReceipt && lastSale && (
         <div id="thermal-receipt" className="hidden print:block font-mono text-[12px] leading-tight p-4 w-[80mm]">
           <div className="text-center mb-4">
-            <h1 className="font-bold text-lg uppercase">KingKush Supermarket</h1>
-            <p>1331-60100-Embu</p>
-            <p>Tel: +254 701137747</p>
+            <h1 className="font-bold text-lg uppercase">{settings?.businessName || 'KingKush Sale'}</h1>
+            {currentBranchName && <p>{currentBranchName}</p>}
+            {settings?.storeAddress && <p>{settings.storeAddress}</p>}
+            {settings?.storePhone && <p>Tel: {settings.storePhone}</p>}
             <p className="mt-2">********************************</p>
           </div>
           
@@ -883,6 +1012,7 @@ export default function POS() {
               <span>TIME: {toDate(lastSale.timestamp).toLocaleTimeString()}</span>
             </div>
             <p>RECEIPT #: {lastSale.id.toUpperCase()}</p>
+            {lastSale.shiftId && <p>SHIFT: {lastSale.shiftId.toUpperCase()}</p>}
             <p>CASHIER: {lastSale.cashierName.toUpperCase()}</p>
             {lastSale.customerName && <p>CUSTOMER: {lastSale.customerName.toUpperCase()}</p>}
             <p>********************************</p>
@@ -920,7 +1050,7 @@ export default function POS() {
               <span>KES {lastSale.totalAmount.toLocaleString()}</span>
             </div>
             <div className="flex justify-between">
-              <span>PAYMENT ({lastSale.paymentMethod.toUpperCase()})</span>
+              <span>PAYMENT ({receiptPaymentLabel(lastSale)})</span>
               <span>KES {lastSale.amountPaid.toLocaleString()}</span>
             </div>
             <div className="flex justify-between">
@@ -936,10 +1066,8 @@ export default function POS() {
           </div>
 
           <div className="text-center">
-            <p className="font-bold mb-1 uppercase">All goods are inclusive of vat</p>
-            <p>THANK YOU FOR SHOPPING WITH US!</p>
-            <p>GOODS ONCE SOLD ARE NOT RETURNABLE</p>
-            <p className="mt-4">Created by Noxira labs(+254 701137747)</p>
+            <p className="font-bold mb-1 uppercase">{settings?.receiptHeader || 'Thank you for shopping with us!'}</p>
+            <p>{settings?.receiptFooter || 'Goods once sold are not returnable.'}</p>
             <p className="mt-2">********************************</p>
           </div>
         </div>

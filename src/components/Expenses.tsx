@@ -30,6 +30,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
+import { createExpense } from '../services/platformApi';
 
 const PAYMENT_METHODS = ['cash', 'mpesa', 'bank', 'other'] as const;
 
@@ -104,12 +105,12 @@ export default function Expenses() {
     if (!user) return;
 
     try {
-      await addDoc(collection(db, 'expenses'), {
-        ...formData,
+      await createExpense({
+        category: formData.category,
+        description: formData.description,
         amount: parseFloat(formData.amount),
-        date: serverTimestamp(),
-        recordedBy: user.uid,
-        recordedByName: user.displayName || user.username
+        paymentMethod: formData.paymentMethod,
+        reference: formData.reference || undefined
       });
       setIsModalOpen(false);
       setFormData({

@@ -6,6 +6,7 @@ const DEFAULT_PERMISSIONS = [
   'dashboard',
   'pos',
   'sales-history',
+  'shifts',
   'customers',
   'credits',
   'products',
@@ -13,6 +14,7 @@ const DEFAULT_PERMISSIONS = [
   'inventory',
   'purchase-orders',
   'suppliers',
+  'branches',
   'labels',
   'reports',
   'expenses',
@@ -63,13 +65,14 @@ export default async function handler(req: any, res: any) {
           username,
           email,
           display_name,
+          branch_id,
           role,
           permissions,
           status,
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, 'superadmin', $5::jsonb, 'active', NOW(), NOW())
+        VALUES ($1, $2, $3, $4, 'branch_main', 'superadmin', $5::jsonb, 'active', NOW(), NOW())
         `,
         [userId, username, email, displayName, JSON.stringify(DEFAULT_PERMISSIONS)]
       );

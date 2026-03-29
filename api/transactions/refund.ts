@@ -2,6 +2,7 @@ import { requirePermission } from '../_lib/auth';
 import { insertAuditLog } from '../_lib/audit';
 import { createId, withTransaction } from '../_lib/db';
 import { readJsonBody } from '../_lib/http';
+import { getOpenShift, insertCashMovement, resolveBranchId } from '../_lib/operations';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -34,13 +35,26 @@ export default async function handler(req: any, res: any) {
         id: string;
         customer_id: string | null;
         customer_name: string | null;
+        branch_id: string | null;
         is_credit: boolean;
         is_refunded: boolean;
+        payment_method: string;
+        tender_method: string | null;
         outstanding_balance: string;
         refund_amount: string;
       }>(
         `
-        SELECT id, customer_id, customer_name, is_credit, is_refunded, outstanding_balance, refund_amount
+        SELECT
+          id,
+          customer_id,
+          customer_name,
+          branch_id,
+          is_credit,
+          is_refunded,
+          payment_method,
+          tender_method,
+          outstanding_balance,
+          refund_amount
         FROM sales
         WHERE id = $1
         FOR UPDATE
@@ -83,6 +97,12 @@ export default async function handler(req: any, res: any) {
 
       const refundedAt = new Date().toISOString();
       const refundAmount = targetItems.reduce((sum, item) => sum + Number(item.total_price ?? 0), 0);
+      const effectiveTenderMethod = (sale.tender_method || sale.payment_method || '').toLowerCase();
+      const openShift = await getOpenShift(client, user.uid);
+      const branchId = sale.branch_id || await resolveBranchId(client, user);
+      if (effectiveTenderMethod === 'cash' && !openShift) {
+        throw new Error('An open cashier shift is required before processing a cash refund');
+      }
 
       for (const item of targetItems) {
         await client.query(
@@ -118,10 +138,11 @@ export default async function handler(req: any, res: any) {
             reason,
             source_type,
             source_id,
+            branch_id,
             user_id,
             created_at
           )
-          VALUES ($1, $2, 'stock-in', $3, $4, $5, 'refund', $6, $7, $8::timestamptz)
+          VALUES ($1, $2, 'stock-in', $3, $4, $5, 'refund', $6, $7, $8, $9::timestamptz)
           `,
           [
             createId('inv'),
@@ -130,6 +151,7 @@ export default async function handler(req: any, res: any) {
             Math.abs(item.quantity),
             `${itemId ? 'Partial' : 'Full'} refund: Sale ${saleId}`,
             saleId,
+            branchId,
             user.uid,
             refundedAt
           ]
@@ -180,9 +202,23 @@ export default async function handler(req: any, res: any) {
         );
       }
 
+      if (effectiveTenderMethod === 'cash' && openShift) {
+        await insertCashMovement(client, {
+          shiftId: openShift.id,
+          branchId,
+          userId: user.uid,
+          userName: user.displayName || user.username,
+          type: 'refund',
+          amount: refundAmount,
+          reason: `${itemId ? 'Partial' : 'Full'} refund for sale ${saleId}`,
+          reference: refundReason,
+          createdAt: refundedAt
+        });
+      }
+
       await insertAuditLog(
         client,
-        user,
+        { ...user, branchId },
         itemId ? 'PARTIAL_REFUND' : 'REFUND_SALE',
         `${itemId ? 'Partially refunded' : 'Refunded'} sale ${saleId}. Reason: ${refundReason}`
       );
@@ -200,6 +236,8 @@ export default async function handler(req: any, res: any) {
     const statusCode =
       message.includes('required') || message.includes('refundable') || message.includes('not found')
         ? 400
+        : message.includes('open cashier shift')
+          ? 409
         : 500;
     return res.status(statusCode).json({ error: message });
   }

@@ -13,7 +13,7 @@ import {
   OperationType,
   toDate
 } from '../data';
-import { PurchaseOrder, Product, Supplier, Category } from '../types';
+import { PurchaseOrder, Product, Supplier, Category, Branch } from '../types';
 import { useAuth } from '../App';
 import { 
   Plus, 
@@ -37,6 +37,7 @@ export default function PurchaseOrders() {
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -98,11 +99,16 @@ export default function PurchaseOrders() {
       (snapshot) => setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category))),
       (err) => handleFirestoreError(err, OperationType.LIST, 'categories')
     );
+    const unsubBranches = onSnapshot(collection(db, 'branches'),
+      (snapshot) => setBranches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Branch))),
+      (err) => handleFirestoreError(err, OperationType.LIST, 'branches')
+    );
     return () => {
       unsubOrders();
       unsubProducts();
       unsubSuppliers();
       unsubCategories();
+      unsubBranches();
     };
   }, []);
 
@@ -196,10 +202,13 @@ export default function PurchaseOrders() {
     try {
       const totalAmount = formData.items.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
       const supplier = suppliers.find(s => s.id === formData.supplierId);
+      const branch = branches.find((entry) => entry.id === (user?.branchId || 'branch_main'));
 
       const orderData = {
         supplierId: formData.supplierId,
         supplierName: supplier?.name || 'Unknown',
+        branchId: branch?.id || user?.branchId || 'branch_main',
+        branchName: branch?.name || 'Main Branch',
         items: formData.items,
         totalAmount,
         status: 'pending',

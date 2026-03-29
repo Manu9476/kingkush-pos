@@ -2,6 +2,7 @@ import { requirePermission } from '../_lib/auth';
 import { insertAuditLog } from '../_lib/audit';
 import { createId, withTransaction } from '../_lib/db';
 import { readJsonBody } from '../_lib/http';
+import { resolveBranchId } from '../_lib/operations';
 
 type PurchaseOrderPayload = {
   supplierId?: string;
@@ -39,6 +40,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const result = await withTransaction(async (client) => {
+      const branchId = await resolveBranchId(client, user);
       const orderResult = await client.query<{ id: string; payload: PurchaseOrderPayload }>(
         `
         SELECT id, payload
@@ -101,11 +103,12 @@ export default async function handler(req: any, res: any) {
             supplier_id,
             unit_cost,
             notes,
+            branch_id,
             user_id,
             created_at
           )
           VALUES (
-            $1, $2, 'stock-in', $3, $4, $5, 'purchase-order', $6, $7, $8, $9, $10, $11::timestamptz
+            $1, $2, 'stock-in', $3, $4, $5, 'purchase-order', $6, $7, $8, $9, $10, $11, $12::timestamptz
           )
           `,
           [
@@ -118,6 +121,7 @@ export default async function handler(req: any, res: any) {
             payload.supplierId || null,
             item.costPrice,
             payload.notes || null,
+            branchId,
             user.uid,
             receivedAt
           ]
@@ -142,7 +146,7 @@ export default async function handler(req: any, res: any) {
 
       await insertAuditLog(
         client,
-        user,
+        { ...user, branchId },
         'RECEIVE_PO',
         `Received purchase order ${orderId} from ${payload.supplierName || 'Unknown supplier'}`
       );

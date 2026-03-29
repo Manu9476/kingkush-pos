@@ -24,6 +24,7 @@ export default async function handler(req: any, res: any) {
         username: string;
         email: string;
         display_name: string;
+        branch_id: string | null;
         role: 'superadmin' | 'admin' | 'cashier';
         permissions: unknown;
         status: 'active' | 'inactive';
@@ -36,6 +37,7 @@ export default async function handler(req: any, res: any) {
           u.username,
           u.email,
           u.display_name,
+          u.branch_id,
           u.role,
           u.permissions,
           u.status,

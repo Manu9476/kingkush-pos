@@ -56,18 +56,20 @@ const explicitCollections: Record<string, ExplicitConfig> = {
       username: { column: 'username', type: 'text' },
       email: { column: 'email', type: 'text' },
       displayName: { column: 'display_name', type: 'text' },
+      branchId: { column: 'branch_id', type: 'text' },
       role: { column: 'role', type: 'text' },
       permissions: { column: 'permissions', type: 'json' },
       status: { column: 'status', type: 'text' },
       createdAt: { column: 'created_at', type: 'timestamp' }
     },
-    writableFields: ['displayName', 'role', 'permissions', 'status'],
+    writableFields: ['displayName', 'branchId', 'role', 'permissions', 'status'],
     allowDelete: true,
     serialize: (row) => ({
       uid: row.id,
       username: row.username,
       email: row.email,
       displayName: row.display_name,
+      branchId: row.branch_id,
       role: row.role,
       permissions: normalizeJsonArray(row.permissions),
       status: row.status,
@@ -76,16 +78,42 @@ const explicitCollections: Record<string, ExplicitConfig> = {
   },
   settings: {
     table: 'system_settings',
-    readPermissions: ['settings', 'pos', 'products', 'credits', 'reports'],
+    readPermissions: ['settings', 'pos', 'products', 'credits', 'reports', 'branches'],
     writePermissions: ['settings'],
     fieldMap: {
       skuPrefix: { column: 'sku_prefix', type: 'text' },
       badDebtThresholdDays: { column: 'bad_debt_threshold_days', type: 'integer' },
       taxRate: { column: 'tax_rate', type: 'number' },
       loyaltyPointRate: { column: 'loyalty_point_rate', type: 'integer' },
+      businessName: { column: 'business_name', type: 'text' },
+      storeAddress: { column: 'store_address', type: 'text' },
+      storePhone: { column: 'store_phone', type: 'text' },
+      storeEmail: { column: 'store_email', type: 'text' },
+      receiptHeader: { column: 'receipt_header', type: 'text' },
+      receiptFooter: { column: 'receipt_footer', type: 'text' },
+      receiptAutoPrint: { column: 'receipt_auto_print', type: 'boolean' },
+      barcodeAutofocus: { column: 'barcode_autofocus', type: 'boolean' },
+      barcodeSubmitDelayMs: { column: 'barcode_submit_delay_ms', type: 'integer' },
+      defaultBranchId: { column: 'default_branch_id', type: 'text' },
       updatedAt: { column: 'updated_at', type: 'timestamp' }
     },
-    writableFields: ['skuPrefix', 'badDebtThresholdDays', 'taxRate', 'loyaltyPointRate', 'updatedAt'],
+    writableFields: [
+      'skuPrefix',
+      'badDebtThresholdDays',
+      'taxRate',
+      'loyaltyPointRate',
+      'businessName',
+      'storeAddress',
+      'storePhone',
+      'storeEmail',
+      'receiptHeader',
+      'receiptFooter',
+      'receiptAutoPrint',
+      'barcodeAutofocus',
+      'barcodeSubmitDelayMs',
+      'defaultBranchId',
+      'updatedAt'
+    ],
     allowCreate: true,
     serialize: (row) => ({
       id: row.id,
@@ -93,6 +121,45 @@ const explicitCollections: Record<string, ExplicitConfig> = {
       badDebtThresholdDays: Number(row.bad_debt_threshold_days ?? 30),
       taxRate: Number(row.tax_rate ?? 0),
       loyaltyPointRate: Number(row.loyalty_point_rate ?? 100),
+      businessName: row.business_name,
+      storeAddress: row.store_address,
+      storePhone: row.store_phone,
+      storeEmail: row.store_email,
+      receiptHeader: row.receipt_header,
+      receiptFooter: row.receipt_footer,
+      receiptAutoPrint: Boolean(row.receipt_auto_print),
+      barcodeAutofocus: row.barcode_autofocus === undefined ? true : Boolean(row.barcode_autofocus),
+      barcodeSubmitDelayMs: Number(row.barcode_submit_delay_ms ?? 120),
+      defaultBranchId: row.default_branch_id,
+      updatedAt: toIsoString(row.updated_at)
+    })
+  },
+  branches: {
+    table: 'branches',
+    readPermissions: ['branches', 'settings', 'pos', 'reports', 'inventory', 'users'],
+    writePermissions: ['branches', 'settings'],
+    fieldMap: {
+      code: { column: 'code', type: 'text' },
+      name: { column: 'name', type: 'text' },
+      address: { column: 'address', type: 'text' },
+      phone: { column: 'phone', type: 'text' },
+      email: { column: 'email', type: 'text' },
+      status: { column: 'status', type: 'text' },
+      createdAt: { column: 'created_at', type: 'timestamp' },
+      updatedAt: { column: 'updated_at', type: 'timestamp' }
+    },
+    writableFields: ['code', 'name', 'address', 'phone', 'email', 'status', 'updatedAt'],
+    allowCreate: true,
+    allowDelete: true,
+    serialize: (row) => ({
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      address: row.address,
+      phone: row.phone,
+      email: row.email,
+      status: row.status,
+      createdAt: toIsoString(row.created_at),
       updatedAt: toIsoString(row.updated_at)
     })
   },
@@ -206,6 +273,9 @@ Object.assign(explicitCollections, {
       refundedBy: { column: 'refunded_by', type: 'text' },
       refundReason: { column: 'refund_reason', type: 'text' },
       outstandingBalance: { column: 'outstanding_balance', type: 'number' },
+      branchId: { column: 'branch_id', type: 'text' },
+      shiftId: { column: 'shift_id', type: 'text' },
+      tenderMethod: { column: 'tender_method', type: 'text' },
       timestamp: { column: 'sold_at', type: 'timestamp' }
     },
     readOnly: true,
@@ -228,6 +298,9 @@ Object.assign(explicitCollections, {
       refundedBy: row.refunded_by,
       refundReason: row.refund_reason,
       outstandingBalance: Number(row.outstanding_balance ?? 0),
+      branchId: row.branch_id,
+      shiftId: row.shift_id,
+      tenderMethod: row.tender_method,
       timestamp: toIsoString(row.sold_at)
     })
   },
@@ -273,6 +346,8 @@ Object.assign(explicitCollections, {
       reference: { column: 'reference', type: 'text' },
       cashierId: { column: 'cashier_id', type: 'text' },
       cashierName: { column: 'cashier_name', type: 'text' },
+      branchId: { column: 'branch_id', type: 'text' },
+      shiftId: { column: 'shift_id', type: 'text' },
       timestamp: { column: 'paid_at', type: 'timestamp' }
     },
     readOnly: true,
@@ -286,6 +361,8 @@ Object.assign(explicitCollections, {
       reference: row.reference,
       cashierId: row.cashier_id,
       cashierName: row.cashier_name,
+      branchId: row.branch_id,
+      shiftId: row.shift_id,
       timestamp: toIsoString(row.paid_at)
     })
   },
@@ -304,7 +381,8 @@ Object.assign(explicitCollections, {
       reference: { column: 'reference', type: 'text' },
       notes: { column: 'notes', type: 'text' },
       sourceType: { column: 'source_type', type: 'text' },
-      sourceId: { column: 'source_id', type: 'text' }
+      sourceId: { column: 'source_id', type: 'text' },
+      branchId: { column: 'branch_id', type: 'text' }
     },
     readOnly: true,
     serialize: (row) => ({
@@ -320,7 +398,8 @@ Object.assign(explicitCollections, {
       reference: row.reference,
       notes: row.notes,
       sourceType: row.source_type,
-      sourceId: row.source_id
+      sourceId: row.source_id,
+      branchId: row.branch_id
     })
   },
   audit_logs: {
@@ -332,9 +411,10 @@ Object.assign(explicitCollections, {
       userName: { column: 'user_name', type: 'text' },
       action: { column: 'action', type: 'text' },
       details: { column: 'details', type: 'text' },
+      branchId: { column: 'branch_id', type: 'text' },
       timestamp: { column: 'created_at', type: 'timestamp' }
     },
-    writableFields: ['userId', 'userName', 'action', 'details', 'timestamp'],
+    writableFields: ['userId', 'userName', 'action', 'details', 'branchId', 'timestamp'],
     allowCreate: true,
     serialize: (row) => ({
       id: row.id,
@@ -342,6 +422,77 @@ Object.assign(explicitCollections, {
       userName: row.user_name,
       action: row.action,
       details: row.details,
+      branchId: row.branch_id,
+      timestamp: toIsoString(row.created_at)
+    })
+  },
+  cash_shifts: {
+    table: 'cash_shifts',
+    readPermissions: ['shifts', 'reports', 'pos'],
+    fieldMap: {
+      userId: { column: 'user_id', type: 'text' },
+      userName: { column: 'user_name', type: 'text' },
+      branchId: { column: 'branch_id', type: 'text' },
+      openingFloat: { column: 'opening_float', type: 'number' },
+      status: { column: 'status', type: 'text' },
+      notes: { column: 'notes', type: 'text' },
+      openingReference: { column: 'opening_reference', type: 'text' },
+      closingNotes: { column: 'closing_notes', type: 'text' },
+      closingCountedCash: { column: 'closing_counted_cash', type: 'number' },
+      expectedCash: { column: 'expected_cash', type: 'number' },
+      variance: { column: 'variance', type: 'number' },
+      closedById: { column: 'closed_by_id', type: 'text' },
+      closedByName: { column: 'closed_by_name', type: 'text' },
+      openedAt: { column: 'opened_at', type: 'timestamp' },
+      closedAt: { column: 'closed_at', type: 'timestamp' },
+      updatedAt: { column: 'updated_at', type: 'timestamp' }
+    },
+    readOnly: true,
+    serialize: (row) => ({
+      id: row.id,
+      userId: row.user_id,
+      userName: row.user_name,
+      branchId: row.branch_id,
+      openingFloat: Number(row.opening_float ?? 0),
+      status: row.status,
+      notes: row.notes,
+      openingReference: row.opening_reference,
+      closingNotes: row.closing_notes,
+      closingCountedCash: row.closing_counted_cash === null || row.closing_counted_cash === undefined ? undefined : Number(row.closing_counted_cash),
+      expectedCash: row.expected_cash === null || row.expected_cash === undefined ? undefined : Number(row.expected_cash),
+      variance: row.variance === null || row.variance === undefined ? undefined : Number(row.variance),
+      closedById: row.closed_by_id,
+      closedByName: row.closed_by_name,
+      openedAt: toIsoString(row.opened_at),
+      closedAt: toNullableIsoString(row.closed_at),
+      updatedAt: toIsoString(row.updated_at)
+    })
+  },
+  cash_movements: {
+    table: 'cash_movements',
+    readPermissions: ['shifts', 'reports', 'pos'],
+    fieldMap: {
+      shiftId: { column: 'shift_id', type: 'text' },
+      branchId: { column: 'branch_id', type: 'text' },
+      userId: { column: 'user_id', type: 'text' },
+      userName: { column: 'user_name', type: 'text' },
+      type: { column: 'type', type: 'text' },
+      amount: { column: 'amount', type: 'number' },
+      reason: { column: 'reason', type: 'text' },
+      reference: { column: 'reference', type: 'text' },
+      timestamp: { column: 'created_at', type: 'timestamp' }
+    },
+    readOnly: true,
+    serialize: (row) => ({
+      id: row.id,
+      shiftId: row.shift_id,
+      branchId: row.branch_id,
+      userId: row.user_id,
+      userName: row.user_name,
+      type: row.type,
+      amount: Number(row.amount ?? 0),
+      reason: row.reason,
+      reference: row.reference,
       timestamp: toIsoString(row.created_at)
     })
   }

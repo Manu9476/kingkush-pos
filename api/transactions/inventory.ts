@@ -2,6 +2,7 @@ import { requirePermission } from '../_lib/auth';
 import { insertAuditLog } from '../_lib/audit';
 import { createId, withTransaction } from '../_lib/db';
 import { readJsonBody } from '../_lib/http';
+import { resolveBranchId } from '../_lib/operations';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -43,6 +44,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const result = await withTransaction(async (client) => {
+      const branchId = await resolveBranchId(client, user);
       const productResult = await client.query<{
         id: string;
         name: string;
@@ -113,12 +115,13 @@ export default async function handler(req: any, res: any) {
           unit_cost,
           reference,
           notes,
+          branch_id,
           user_id,
           resulting_stock,
           created_at
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::timestamptz
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::timestamptz
         )
         `,
         [
@@ -133,6 +136,7 @@ export default async function handler(req: any, res: any) {
           unitCost,
           reference,
           notes,
+          branchId,
           user.uid,
           resultingStock,
           createdAt
@@ -141,7 +145,7 @@ export default async function handler(req: any, res: any) {
 
       await insertAuditLog(
         client,
-        user,
+        { ...user, branchId },
         actionType === 'receiving' ? 'RECEIVE_STOCK' : actionType === 'stock-in' ? 'STOCK_IN' : 'ADJUST_STOCK',
         `${actionType} for ${product.name}: ${quantityDelta > 0 ? '+' : ''}${quantityDelta}`
       );

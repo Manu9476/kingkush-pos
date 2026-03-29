@@ -2,6 +2,7 @@ import { requirePermission } from '../_lib/auth';
 import { insertAuditLog } from '../_lib/audit';
 import { createId, withTransaction } from '../_lib/db';
 import { readJsonBody } from '../_lib/http';
+import { getOpenShift, resolveBranchId } from '../_lib/operations';
 
 type SaleItemInput = {
   id: string;
@@ -26,6 +27,7 @@ export default async function handler(req: any, res: any) {
     const body = await readJsonBody<{
       items?: SaleItemInput[];
       paymentMethod?: 'cash' | 'mpesa' | 'card' | 'credit';
+      tenderMethod?: 'cash' | 'mpesa' | 'card' | 'credit';
       amountPaid?: number;
       customerId?: string;
       customerName?: string;
@@ -34,6 +36,7 @@ export default async function handler(req: any, res: any) {
 
     const items = Array.isArray(body.items) ? body.items : [];
     const paymentMethod = body.paymentMethod || 'cash';
+    const tenderMethod = body.tenderMethod || paymentMethod;
     const amountPaid = Number(body.amountPaid ?? 0);
     const customerId = body.customerId || null;
     const customerName = (body.customerName || '').trim() || null;
@@ -59,6 +62,11 @@ export default async function handler(req: any, res: any) {
     }
 
     const result = await withTransaction(async (client) => {
+      const openShift = await getOpenShift(client, user.uid);
+      if (!openShift) {
+        throw new Error('An open cashier shift is required before completing a sale');
+      }
+      const branchId = openShift.branch_id || await resolveBranchId(client, user);
       const settingsResult = await client.query<{
         tax_rate: string;
         loyalty_point_rate: string;
@@ -118,9 +126,12 @@ export default async function handler(req: any, res: any) {
           id,
           cashier_id,
           cashier_name,
+          branch_id,
+          shift_id,
           total_amount,
           tax_amount,
           payment_method,
+          tender_method,
           amount_paid,
           balance,
           customer_name,
@@ -130,15 +141,18 @@ export default async function handler(req: any, res: any) {
           outstanding_balance,
           sold_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9, $10, $11, $12, $13::timestamptz)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, $11, $12, $13, $14, $15, $16::timestamptz)
         `,
         [
           saleId,
           user.uid,
           user.displayName || user.username,
+          branchId,
+          openShift.id,
           subtotal,
           taxAmount,
           paymentMethod,
+          tenderMethod,
           amountPaid,
           customerName,
           customerId,
@@ -204,10 +218,11 @@ export default async function handler(req: any, res: any) {
             source_type,
             source_id,
             reference,
+            branch_id,
             user_id,
             created_at
           )
-          VALUES ($1, $2, 'stock-out', $3, $4, $5, 'sale', $6, $7, $8, $9::timestamptz)
+          VALUES ($1, $2, 'stock-out', $3, $4, $5, 'sale', $6, $7, $8, $9, $10::timestamptz)
           `,
           [
             createId('inv'),
@@ -217,6 +232,7 @@ export default async function handler(req: any, res: any) {
             `Sale ${saleId}`,
             saleId,
             reference,
+            branchId,
             user.uid,
             soldAt
           ]
@@ -344,9 +360,11 @@ export default async function handler(req: any, res: any) {
               reference,
               cashier_id,
               cashier_name,
+              branch_id,
+              shift_id,
               paid_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz)
             `,
             [
               createId('cpay'),
@@ -358,6 +376,8 @@ export default async function handler(req: any, res: any) {
               `Sale excess applied from ${saleId}`,
               user.uid,
               user.displayName || user.username,
+              branchId,
+              openShift.id,
               soldAt
             ]
           );
@@ -384,7 +404,7 @@ export default async function handler(req: any, res: any) {
 
       await insertAuditLog(
         client,
-        user,
+        { ...user, branchId },
         'COMPLETE_SALE',
         `Completed sale ${saleId} for KES ${subtotal.toLocaleString()}`
       );
@@ -404,6 +424,9 @@ export default async function handler(req: any, res: any) {
           reference,
           isCredit,
           outstandingBalance,
+          branchId,
+          shiftId: openShift.id,
+          tenderMethod,
           timestamp: soldAt,
           newTotalBalance: customerBalance
         }
@@ -416,6 +439,8 @@ export default async function handler(req: any, res: any) {
     const statusCode =
       message.includes('Insufficient stock') || message.includes('required') || message.includes('At least one')
         ? 400
+        : message.includes('open cashier shift')
+          ? 409
         : message.includes('administrators')
           ? 403
           : 500;
