@@ -127,7 +127,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { id: 'pos', label: 'POS', path: '/pos', icon: ShoppingCart },
+    { id: 'pos', label: 'Sale', path: '/pos', icon: ShoppingCart },
     { id: 'sales-history', label: 'Sales History', path: '/sales-history', icon: Receipt },
     { id: 'customers', label: 'Customers', path: '/customers', icon: UsersIcon },
     { id: 'credits', label: 'Credits', path: '/credits', icon: CreditCard },
@@ -158,7 +158,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       `}>
         <div className="h-full flex flex-col">
           <div className="p-8 shrink-0">
-            <h1 className="text-2xl font-black text-white tracking-tight">KingKush POS</h1>
+            <h1 className="text-2xl font-black text-white tracking-tight">KingKush Sale</h1>
             <div className="mt-2">
               <p className="text-[10px] font-bold text-indigo-100 uppercase tracking-wider leading-tight">
                 {user?.role === 'superadmin' ? 'System Super Admin' : 'Staff Portal'}
@@ -202,7 +202,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="sticky top-0 z-40 h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 md:px-12">
           <div className="flex items-center gap-3">
-            <span className="font-black text-indigo-900 text-xl md:hidden">KingKush POS</span>
+            <span className="font-black text-indigo-900 text-xl md:hidden">KingKush Sale</span>
             <div className="hidden md:block">
               <p className="text-sm font-bold text-gray-900">Welcome back, {user?.displayName || user?.username}</p>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{user?.role}</p>
@@ -443,7 +443,7 @@ export default function App() {
       <div className="min-h-screen bg-indigo-900 flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-white font-medium animate-pulse">Initializing KingKush POS...</p>
+          <p className="text-white font-medium animate-pulse">Initializing KingKush Sale...</p>
         </div>
       </div>
     );

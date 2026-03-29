@@ -291,7 +291,7 @@ export default function Settings() {
                   type="text"
                   value={settings.skuPrefix}
                   onChange={(e) => setSettings({ ...settings, skuPrefix: e.target.value.toUpperCase() })}
-                  placeholder="e.g. KK-, POS-"
+                  placeholder="e.g. KK-, SALE-"
                   className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-mono"
                 />
                 <p className="text-xs text-gray-500">This prefix will be prepended to all auto-generated SKUs.</p>

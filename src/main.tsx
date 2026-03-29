@@ -23,7 +23,7 @@ root.render(
     }}
   >
     <div style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: 22, fontWeight: 700 }}>KingKush POS</div>
+      <div style={{ fontSize: 22, fontWeight: 700 }}>KingKush Sale</div>
       <div style={{ marginTop: 8, fontSize: 14, opacity: 0.75 }}>Bootstrapping application...</div>
     </div>
   </div>

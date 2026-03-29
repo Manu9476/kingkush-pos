@@ -473,7 +473,7 @@ export default function POS() {
               amountPaid: paymentToApply,
               remainingBalance: newOutstanding,
               paymentMethod,
-              reference: `POS Excess: ${saleRef.id}`,
+              reference: `Sale Excess: ${saleRef.id}`,
               timestamp: serverTimestamp(),
               cashierId: user?.uid ?? null,
               cashierName: user?.displayName || user?.email || 'Unknown'
@@ -521,7 +521,7 @@ export default function POS() {
       await recordAuditLog(
         user!.uid, 
         user!.displayName || user!.username, 
-        'POS_SALE', 
+        'COMPLETE_SALE', 
         `Completed sale ${saleRef.id} for KES ${total.toLocaleString()}`
       );
       

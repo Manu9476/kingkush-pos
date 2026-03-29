@@ -52,7 +52,7 @@ export default function Login() {
                 <Shield className="w-10 h-10 text-white" />
               </div>
               <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-2">KingKush</h1>
-              <p className="text-gray-600 font-bold uppercase text-[10px] tracking-[0.2em]">Premium POS System</p>
+              <p className="text-gray-600 font-bold uppercase text-[10px] tracking-[0.2em]">Premium Sales System</p>
             </div>
 
             {error && (
@@ -144,7 +144,7 @@ export default function Login() {
             <Shield className="w-4 h-4" />
             System Readiness Check
           </button>
-          <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-[0.3em]">© 2026 KingKush POS</p>
+          <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-[0.3em]">© 2026 KingKush Sale</p>
         </div>
       </div>
 

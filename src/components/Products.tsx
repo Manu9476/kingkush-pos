@@ -426,7 +426,7 @@ export default function Products() {
                   onChange={e => setFormData({...formData, isHotItem: e.target.checked})}
                   className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
                 />
-                <label htmlFor="isHotItem" className="text-sm font-bold text-gray-700">Quick-Add Item (POS)</label>
+                <label htmlFor="isHotItem" className="text-sm font-bold text-gray-700">Quick-Add Item (Sale)</label>
               </div>
             </div>
 

@@ -27,7 +27,7 @@ import ConfirmDialog from './ConfirmDialog';
 
 const AVAILABLE_PERMISSIONS = [
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'pos', label: 'POS' },
+  { id: 'pos', label: 'Sale' },
   { id: 'customers', label: 'Customers' },
   { id: 'credits', label: 'Credits' },
   { id: 'products', label: 'Products' },
