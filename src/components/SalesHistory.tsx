@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { 
   db, 
   collection, 
+  doc,
+  getDoc,
   query, 
   orderBy, 
   onSnapshot, 
   toDate
 } from '../data';
-import { Sale, SaleItem } from '../types';
+import { Branch, Sale, SaleItem, SystemSettings } from '../types';
 import { 
   Search, 
   RotateCcw, 
@@ -20,10 +22,12 @@ import {
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 import { refundSale } from '../services/platformApi';
-import { formatRefundReceiptNumber } from '../utils/receipts';
+import { formatRefundReceiptNumber, getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
 
 export default function SalesHistory() {
   const [sales, setSales] = useState<Sale[]>([]);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -62,6 +66,26 @@ export default function SalesHistory() {
       setLoading(false);
     });
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribeBranches = onSnapshot(collection(db, 'branches'), (snapshot) => {
+      setBranches(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as Branch)));
+    });
+
+    const fetchSettings = async () => {
+      try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'system'));
+        if (settingsDoc.exists()) {
+          setSettings(settingsDoc.data() as SystemSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+      }
+    };
+
+    void fetchSettings();
+    return () => unsubscribeBranches();
   }, []);
 
   useEffect(() => {
@@ -187,6 +211,8 @@ export default function SalesHistory() {
   const hasRefundActivity = Boolean(
     selectedSale && ((selectedSale.refundAmount || 0) > 0 || saleItems.some((item) => item.isRefunded))
   );
+  const refundReceiptBranch = resolveReceiptBranch(branches, selectedSale?.branchId, settings?.defaultBranchId);
+  const refundReceiptIdentity = getReceiptIdentity(settings, refundReceiptBranch);
 
   return (
     <div className="space-y-6">
@@ -434,9 +460,11 @@ export default function SalesHistory() {
         {selectedSale && hasRefundActivity && (
           <>
             <div className="text-center mb-4">
-              <h1 className="font-bold text-lg uppercase">KingKush Supermarket</h1>
+              <h1 className="font-bold text-lg uppercase">{refundReceiptIdentity.businessName}</h1>
               <p className="text-sm font-bold">REFUND RECEIPT</p>
-              <p>1331-60100-Embu</p>
+              {refundReceiptIdentity.branchName && <p>{refundReceiptIdentity.branchName}</p>}
+              {refundReceiptIdentity.address && <p>{refundReceiptIdentity.address}</p>}
+              {refundReceiptIdentity.phone && <p>Tel: {refundReceiptIdentity.phone}</p>}
               <p className="mt-2">********************************</p>
             </div>
             
@@ -480,9 +508,9 @@ export default function SalesHistory() {
             </div>
 
             <div className="text-center border-t border-dashed border-gray-300 pt-4 mt-4">
-              <p className="font-bold mb-1 uppercase">All goods are inclusive of vat</p>
+              <p className="font-bold mb-1 uppercase">{refundReceiptIdentity.header}</p>
               <p>REFUND PROCESSED SUCCESSFULLY</p>
-              <p className="mt-2 text-[10px]">Created by Noxira labs(+254 701137747)</p>
+              <p>{refundReceiptIdentity.footer}</p>
             </div>
           </>
         )}

@@ -6,12 +6,14 @@ import {
   query, 
   orderBy, 
   limit,
+  doc,
+  getDoc,
   handleFirestoreError,
   OperationType,
   getDocs,
   toDate
 } from '../data';
-import { Sale, Product, Credit, SaleItem, Expense, CreditPayment } from '../types';
+import { Branch, Sale, Product, Credit, SaleItem, Expense, CreditPayment, SystemSettings } from '../types';
 import { 
   TrendingUp, 
   TrendingDown,
@@ -40,6 +42,7 @@ import {
 import ReadinessPanel from './ReadinessPanel';
 import { useAuth } from '../App';
 import { motion, AnimatePresence } from 'motion/react';
+import { getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
 
 interface DashboardReceipt {
   id: string;
@@ -63,6 +66,8 @@ export default function Dashboard() {
   const [credits, setCredits] = useState<Credit[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [creditPayments, setCreditPayments] = useState<CreditPayment[]>([]);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [showHealth, setShowHealth] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -97,6 +102,10 @@ export default function Dashboard() {
         (snapshot) => setCreditPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CreditPayment))),
         (err) => handleFirestoreError(err, OperationType.LIST, 'credit_payments')
       ));
+      unsubscribers.push(onSnapshot(collection(db, 'branches'),
+        (snapshot) => setBranches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Branch))),
+        (err) => handleFirestoreError(err, OperationType.LIST, 'branches')
+      ));
     }
 
     if ((user.role as string) === 'superadmin' || user.permissions.includes('products')) {
@@ -110,6 +119,21 @@ export default function Dashboard() {
       unsubscribers.forEach(unsub => unsub());
     };
   }, [user]);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'system'));
+        if (settingsDoc.exists()) {
+          setSettings(settingsDoc.data() as SystemSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+      }
+    };
+
+    void fetchSettings();
+  }, []);
 
   const today = new Date().toLocaleDateString();
   const todaySales = sales.filter(s => {
@@ -190,6 +214,12 @@ export default function Dashboard() {
     receipt.saleId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     receipt.refundReason?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  const previewBranch = resolveReceiptBranch(
+    branches,
+    selectedSale?.branchId || selectedCreditPayment?.branchId,
+    settings?.defaultBranchId
+  );
+  const previewReceiptIdentity = getReceiptIdentity(settings, previewBranch);
 
   const handlePrintReceipt = async (receipt: DashboardReceipt) => {
     setIsPrinting(true);
@@ -490,9 +520,10 @@ export default function Dashboard() {
               <div className="p-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 <div className="bg-gray-50 p-6 rounded-2xl border border-dashed border-gray-200 font-mono text-sm space-y-4">
                   <div className="text-center space-y-1">
-                    <h4 className="font-black text-base uppercase">KingKush Supermarket</h4>
-                    <p className="text-xs text-gray-500">1331-60100-Embu</p>
-                    <p className="text-xs text-gray-500">Tel: +254 701137747</p>
+                    <h4 className="font-black text-base uppercase">{previewReceiptIdentity.businessName}</h4>
+                    {previewReceiptIdentity.branchName && <p className="text-xs text-gray-500">{previewReceiptIdentity.branchName}</p>}
+                    {previewReceiptIdentity.address && <p className="text-xs text-gray-500">{previewReceiptIdentity.address}</p>}
+                    {previewReceiptIdentity.phone && <p className="text-xs text-gray-500">Tel: {previewReceiptIdentity.phone}</p>}
                   </div>
 
                   <div className="border-t border-dashed border-gray-200 pt-4 space-y-1 text-xs">
@@ -583,9 +614,9 @@ export default function Dashboard() {
                   </div>
 
                   <div className="text-center pt-4 text-[10px] text-gray-400">
-                    <p className="font-bold mb-1 uppercase">All goods are inclusive of vat</p>
+                    <p className="font-bold mb-1 uppercase">{previewReceiptIdentity.header}</p>
                     <p>THANK YOU FOR SHOPPING WITH US!</p>
-                    <p className="mt-1">Created by Noxira labs(+254 701137747)</p>
+                    <p className="mt-1">{previewReceiptIdentity.footer}</p>
                   </div>
                 </div>
               </div>
@@ -618,9 +649,10 @@ export default function Dashboard() {
         {(selectedSale || selectedCreditPayment) && (
           <>
             <div className="text-center mb-4">
-              <h1 className="font-bold text-lg uppercase">KingKush Supermarket</h1>
-              <p>1331-60100-Embu</p>
-              <p>Tel: +254 701137747</p>
+              <h1 className="font-bold text-lg uppercase">{previewReceiptIdentity.businessName}</h1>
+              {previewReceiptIdentity.branchName && <p>{previewReceiptIdentity.branchName}</p>}
+              {previewReceiptIdentity.address && <p>{previewReceiptIdentity.address}</p>}
+              {previewReceiptIdentity.phone && <p>Tel: {previewReceiptIdentity.phone}</p>}
               <p className="mt-2">********************************</p>
             </div>
             
@@ -704,10 +736,9 @@ export default function Dashboard() {
             </div>
 
             <div className="text-center border-t border-dashed border-gray-300 pt-4 mt-4">
-              <p className="font-bold mb-1 uppercase">All goods are inclusive of vat</p>
+              <p className="font-bold mb-1 uppercase">{previewReceiptIdentity.header}</p>
               <p>THANK YOU FOR SHOPPING WITH US!</p>
-              <p>Goods once sold are not returnable.</p>
-              <p className="mt-2 text-[10px]">Created by Noxira labs(+254 701137747)</p>
+              <p>{previewReceiptIdentity.footer}</p>
             </div>
           </>
         )}

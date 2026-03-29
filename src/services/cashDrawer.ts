@@ -70,6 +70,8 @@ export async function triggerCashDrawer(settings: SystemSettings, options: Trigg
     const message =
       error instanceof DOMException && error.name === 'AbortError'
         ? 'Cash drawer helper timed out. Confirm the cashier helper is running.'
+        : error instanceof TypeError
+          ? 'Could not reach the cash drawer helper. Confirm it is running on this cashier PC and restart it after pulling the latest code.'
         : error instanceof Error
           ? error.message
           : 'Failed to trigger the cash drawer.';

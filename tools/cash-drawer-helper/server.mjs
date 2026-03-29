@@ -9,14 +9,33 @@ const socketTimeoutMs = Number(process.env.DRAWER_SOCKET_TIMEOUT_MS || 4000);
 const allowOrigin = process.env.DRAWER_ALLOW_ORIGIN || '*';
 const dryRun = /^(1|true|yes)$/i.test(process.env.DRAWER_DRY_RUN || '');
 
-function writeJson(res, statusCode, payload) {
-  res.writeHead(statusCode, {
+function getCorsHeaders(req) {
+  const requestOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : '';
+  const origin = allowOrigin === '*' ? (requestOrigin || '*') : allowOrigin;
+  const headers = {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
-  });
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin, Access-Control-Request-Private-Network'
+  };
+
+  if (req.headers['access-control-request-private-network'] === 'true') {
+    headers['Access-Control-Allow-Private-Network'] = 'true';
+  }
+
+  return headers;
+}
+
+function writeJson(req, res, statusCode, payload) {
+  res.writeHead(statusCode, getCorsHeaders(req));
   res.end(JSON.stringify(payload));
+}
+
+function writeEmpty(req, res, statusCode) {
+  res.writeHead(statusCode, getCorsHeaders(req));
+  res.end();
 }
 
 function readJsonBody(req) {
@@ -99,17 +118,17 @@ function sendDrawerPulse() {
 
 const server = http.createServer(async (req, res) => {
   if (!req.url) {
-    writeJson(res, 404, { error: 'Not Found' });
+    writeJson(req, res, 404, { error: 'Not Found' });
     return;
   }
 
   if (req.method === 'OPTIONS') {
-    writeJson(res, 204, { ok: true });
+    writeEmpty(req, res, 204);
     return;
   }
 
   if (req.method === 'GET' && req.url === '/health') {
-    writeJson(res, 200, {
+    writeJson(req, res, 200, {
       ok: true,
       dryRun,
       printerConfigured: Boolean(printerHost),
@@ -124,7 +143,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const result = await sendDrawerPulse();
 
-      writeJson(res, 200, {
+      writeJson(req, res, 200, {
         ok: true,
         result,
         eventType: typeof body.eventType === 'string' ? body.eventType : 'manual',
@@ -132,14 +151,14 @@ const server = http.createServer(async (req, res) => {
         triggeredAt: new Date().toISOString()
       });
     } catch (error) {
-      writeJson(res, 500, {
+      writeJson(req, res, 500, {
         error: error instanceof Error ? error.message : 'Failed to trigger cash drawer.'
       });
     }
     return;
   }
 
-  writeJson(res, 404, { error: 'Not Found' });
+  writeJson(req, res, 404, { error: 'Not Found' });
 });
 
 server.listen(port, '127.0.0.1', () => {

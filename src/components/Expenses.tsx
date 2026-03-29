@@ -8,12 +8,13 @@ import {
   addDoc,
   deleteDoc,
   doc,
+  getDoc,
   serverTimestamp,
   handleFirestoreError,
   OperationType,
   toDate
 } from '../data';
-import { Expense, ExpenseCategory } from '../types';
+import { Branch, Expense, ExpenseCategory, SystemSettings } from '../types';
 import { useAuth } from '../App';
 import { 
   Plus, 
@@ -31,6 +32,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 import { createExpense } from '../services/platformApi';
+import { getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
 
 const PAYMENT_METHODS = ['cash', 'mpesa', 'bank', 'other'] as const;
 
@@ -38,6 +40,8 @@ export default function Expenses() {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,9 +98,30 @@ export default function Expenses() {
       (err) => handleFirestoreError(err, OperationType.LIST, 'expense_categories')
     );
 
+    const unsubBranches = onSnapshot(collection(db, 'branches'),
+      (snapshot) => {
+        setBranches(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as Branch)));
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'branches')
+    );
+
+    const fetchSettings = async () => {
+      try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'system'));
+        if (settingsDoc.exists()) {
+          setSettings(settingsDoc.data() as SystemSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+      }
+    };
+
+    void fetchSettings();
+
     return () => {
       unsub();
       unsubCats();
+      unsubBranches();
     };
   }, []);
 
@@ -181,6 +206,8 @@ export default function Expenses() {
   });
 
   const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const expenseReceiptBranch = resolveReceiptBranch(branches, selectedExpense?.branchId, settings?.defaultBranchId);
+  const expenseReceiptIdentity = getReceiptIdentity(settings, expenseReceiptBranch);
 
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto">
@@ -553,9 +580,10 @@ export default function Expenses() {
       {selectedExpense && (
         <div id="expense-voucher" className="hidden print:block font-mono text-[12px] leading-tight">
           <div className="text-center mb-6">
-            <h1 className="font-bold text-lg uppercase">KingKush Supermarket</h1>
-            <p className="text-sm">1331-60100-Embu</p>
-            <p className="text-sm">Tel: +254 701137747</p>
+            <h1 className="font-bold text-lg uppercase">{expenseReceiptIdentity.businessName}</h1>
+            {expenseReceiptIdentity.branchName && <p className="text-sm">{expenseReceiptIdentity.branchName}</p>}
+            {expenseReceiptIdentity.address && <p className="text-sm">{expenseReceiptIdentity.address}</p>}
+            {expenseReceiptIdentity.phone && <p className="text-sm">Tel: {expenseReceiptIdentity.phone}</p>}
             <p className="mt-2">********************************</p>
           </div>
           
@@ -611,9 +639,9 @@ export default function Expenses() {
 
           <div className="text-center mt-12 text-[10px]">
             <p>********************************</p>
-            <p className="font-bold mb-1 uppercase">All goods are inclusive of vat</p>
+            <p className="font-bold mb-1 uppercase">{expenseReceiptIdentity.header}</p>
             <p>INTERNAL SHOP DOCUMENT</p>
-            <p className="mt-2">Created by Noxira labs(+254 701137747)</p>
+            <p>{expenseReceiptIdentity.footer}</p>
           </div>
         </div>
       )}

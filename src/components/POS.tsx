@@ -21,7 +21,7 @@ import ConfirmDialog from './ConfirmDialog';
 
 import { isCashDrawerEnabled, saleUsesCashDrawer, triggerCashDrawer } from '../services/cashDrawer';
 import { createSale, getShiftStatus } from '../services/platformApi';
-import { formatSaleReceiptNumber } from '../utils/receipts';
+import { formatSaleReceiptNumber, getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
 
 export default function POS() {
   const { user } = useAuth();
@@ -404,6 +404,12 @@ export default function POS() {
   const taxAmount = (total * taxRate) / 100;
   const checkoutCreditAmount = Math.max(total - amountPaid, 0);
   const currentBranchName = branches.find((branch) => branch.id === (currentShift?.branchId || settings?.defaultBranchId))?.name || 'Main Branch';
+  const receiptBranch = resolveReceiptBranch(
+    branches,
+    lastSale?.branchId,
+    currentShift?.branchId || settings?.defaultBranchId
+  );
+  const receiptIdentity = getReceiptIdentity(settings, receiptBranch);
   const receiptPaymentLabel = (sale: Sale) => {
     const hasCreditBalance = Boolean(sale.isCredit || (sale.outstandingBalance || 0) > 0);
     if (hasCreditBalance && sale.amountPaid > 0 && sale.tenderMethod && sale.tenderMethod !== 'credit') {
@@ -965,14 +971,14 @@ export default function POS() {
                 <p className="text-xs text-gray-500">Receipt #: {formatSaleReceiptNumber(lastSale.id)}</p>
               </div>
 
-              {/* Receipt Preview */}
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 font-mono text-[10px] space-y-2 max-w-75 mx-auto shadow-inner">
-                <div className="text-center border-b border-dashed border-gray-300 pb-2 mb-2">
-                  <h4 className="font-bold text-sm uppercase">{settings?.businessName || 'KingKush Sale'}</h4>
-                  {currentBranchName && <p>{currentBranchName}</p>}
-                  {settings?.storeAddress && <p>{settings.storeAddress}</p>}
-                  {settings?.storePhone && <p>Tel: {settings.storePhone}</p>}
-                </div>
+                {/* Receipt Preview */}
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 font-mono text-[10px] space-y-2 max-w-75 mx-auto shadow-inner">
+                  <div className="text-center border-b border-dashed border-gray-300 pb-2 mb-2">
+                  <h4 className="font-bold text-sm uppercase">{receiptIdentity.businessName}</h4>
+                  {receiptIdentity.branchName && <p>{receiptIdentity.branchName}</p>}
+                  {receiptIdentity.address && <p>{receiptIdentity.address}</p>}
+                  {receiptIdentity.phone && <p>Tel: {receiptIdentity.phone}</p>}
+                  </div>
                 
                 <div className="flex justify-between">
                   <span>Date: {toDate(lastSale.timestamp).toLocaleDateString()}</span>
@@ -1040,8 +1046,8 @@ export default function POS() {
                 </div>
 
                 <div className="text-center border-t border-dashed border-gray-300 pt-2 mt-4">
-                  <p className="font-bold text-xs mb-1 uppercase">{settings?.receiptHeader || 'Thank you for shopping with us!'}</p>
-                  <p>{settings?.receiptFooter || 'Goods once sold are not returnable.'}</p>
+                  <p className="font-bold text-xs mb-1 uppercase">{receiptIdentity.header}</p>
+                  <p>{receiptIdentity.footer}</p>
                 </div>
               </div>
 
@@ -1077,10 +1083,10 @@ export default function POS() {
       {showReceipt && lastSale && (
         <div id="thermal-receipt" className="hidden print:block font-mono text-[12px] leading-tight p-4 w-[80mm]">
           <div className="text-center mb-4">
-            <h1 className="font-bold text-lg uppercase">{settings?.businessName || 'KingKush Sale'}</h1>
-            {currentBranchName && <p>{currentBranchName}</p>}
-            {settings?.storeAddress && <p>{settings.storeAddress}</p>}
-            {settings?.storePhone && <p>Tel: {settings.storePhone}</p>}
+            <h1 className="font-bold text-lg uppercase">{receiptIdentity.businessName}</h1>
+            {receiptIdentity.branchName && <p>{receiptIdentity.branchName}</p>}
+            {receiptIdentity.address && <p>{receiptIdentity.address}</p>}
+            {receiptIdentity.phone && <p>Tel: {receiptIdentity.phone}</p>}
             <p className="mt-2">********************************</p>
           </div>
           
@@ -1150,8 +1156,8 @@ export default function POS() {
           </div>
 
           <div className="text-center">
-            <p className="font-bold mb-1 uppercase">{settings?.receiptHeader || 'Thank you for shopping with us!'}</p>
-            <p>{settings?.receiptFooter || 'Goods once sold are not returnable.'}</p>
+            <p className="font-bold mb-1 uppercase">{receiptIdentity.header}</p>
+            <p>{receiptIdentity.footer}</p>
             <p className="mt-2">********************************</p>
           </div>
         </div>

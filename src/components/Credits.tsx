@@ -11,12 +11,14 @@ import {
   handleFirestoreError,
   OperationType
 } from '../data';
-import { Credit, CreditPayment, SystemSettings } from '../types';
+import { Branch, Credit, CreditPayment, SystemSettings } from '../types';
 import { recordCreditPayment } from '../services/platformApi';
+import { formatCreditReceiptNumber, getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
 
 export default function Credits() {
   const [credits, setCredits] = useState<Credit[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCredit, setSelectedCredit] = useState<Credit | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -29,10 +31,13 @@ export default function Credits() {
 
   useEffect(() => {
     const q = query(collection(db, 'credits'), where('status', '==', 'open'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeCredits = onSnapshot(q, (snapshot) => {
       setCredits(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Credit)));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'credits');
+    });
+    const unsubscribeBranches = onSnapshot(collection(db, 'branches'), (snapshot) => {
+      setBranches(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as Branch)));
     });
 
     const fetchSettings = async () => {
@@ -47,7 +52,10 @@ export default function Credits() {
     };
 
     fetchSettings();
-    return () => unsubscribe();
+    return () => {
+      unsubscribeCredits();
+      unsubscribeBranches();
+    };
   }, []);
 
   const filteredCredits = credits.filter(c => 
@@ -56,6 +64,8 @@ export default function Credits() {
   );
 
   const totalOutstanding = credits.reduce((sum, c) => sum + c.outstandingBalance, 0);
+  const creditReceiptBranch = resolveReceiptBranch(branches, lastPayment?.branchId, settings?.defaultBranchId);
+  const creditReceiptIdentity = getReceiptIdentity(settings, creditReceiptBranch);
 
   const handleSettle = (credit: Credit) => {
     setSelectedCredit(credit);
@@ -334,9 +344,10 @@ export default function Credits() {
       {lastPayment && (
         <div id="credit-receipt" className="hidden print:block font-mono text-[12px] leading-tight">
           <div className="text-center mb-6">
-            <h1 className="font-bold text-lg uppercase">KingKush Supermarket</h1>
-            <p className="text-sm">1331-60100-Embu</p>
-            <p className="text-sm">Tel: +254 701137747</p>
+            <h1 className="font-bold text-lg uppercase">{creditReceiptIdentity.businessName}</h1>
+            {creditReceiptIdentity.branchName && <p className="text-sm">{creditReceiptIdentity.branchName}</p>}
+            {creditReceiptIdentity.address && <p className="text-sm">{creditReceiptIdentity.address}</p>}
+            {creditReceiptIdentity.phone && <p className="text-sm">Tel: {creditReceiptIdentity.phone}</p>}
             <p className="mt-2">********************************</p>
           </div>
           
@@ -351,7 +362,7 @@ export default function Credits() {
             </div>
             <div className="flex justify-between">
               <span>RECEIPT #:</span>
-              <span>{lastPayment.id.slice(-8).toUpperCase()}</span>
+              <span>{formatCreditReceiptNumber(lastPayment.id)}</span>
             </div>
             <div className="flex justify-between">
               <span>SALE NO:</span>
@@ -397,9 +408,9 @@ export default function Credits() {
 
           <div className="text-center mt-12 text-[10px]">
             <p>********************************</p>
-            <p className="font-bold mb-1 uppercase">All goods are inclusive of vat</p>
+            <p className="font-bold mb-1 uppercase">{creditReceiptIdentity.header}</p>
             <p>THANK YOU FOR YOUR PAYMENT</p>
-            <p className="mt-2">Created by Noxira labs(+254 701137747)</p>
+            <p>{creditReceiptIdentity.footer}</p>
           </div>
         </div>
       )}
