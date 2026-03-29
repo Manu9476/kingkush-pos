@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { hashPassword, verifyPassword, createSessionToken, hashSessionToken, parseCookies } from '../api/_lib/security';
-import { hasPermission, serializeUser } from '../api/_lib/auth';
+import { hashPassword, verifyPassword, createSessionToken, hashSessionToken, parseCookies } from '../backend/lib/security';
+import { hasPermission, serializeUser } from '../backend/lib/auth';
 
 test('password hashing verifies the original password and rejects a wrong one', async () => {
   const password = 'SuperSecure123!';

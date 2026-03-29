@@ -21,12 +21,23 @@ function resolveApiHandlerFile(urlPath: string) {
     return null;
   }
 
-  const target = path.resolve(apiRoot, `${segments.join(path.sep)}.ts`);
-  if (!target.startsWith(apiRoot)) {
-    return null;
+  const resolveCandidate = (target: string) => {
+    if (!target.startsWith(apiRoot)) {
+      return null;
+    }
+    return fs.existsSync(target) ? target : null;
+  };
+
+  const exactTarget = resolveCandidate(path.resolve(apiRoot, `${segments.join(path.sep)}.ts`));
+  if (exactTarget) {
+    return exactTarget;
   }
 
-  return fs.existsSync(target) ? target : null;
+  if (segments.length >= 2) {
+    return resolveCandidate(path.resolve(apiRoot, ...segments.slice(0, -1), '[action].ts'));
+  }
+
+  return null;
 }
 
 async function loadApiHandler(handlerFile: string) {

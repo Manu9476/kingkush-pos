@@ -1,7 +1,7 @@
-import { requireUser } from '../_lib/auth';
-import { readJsonBody } from '../_lib/http';
-import { withTransaction } from '../_lib/db';
-import { hashPassword, verifyPassword } from '../_lib/security';
+import { requireUser } from '../../backend/lib/auth';
+import { readJsonBody } from '../../backend/lib/http';
+import { withTransaction } from '../../backend/lib/db';
+import { hashPassword, verifyPassword } from '../../backend/lib/security';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

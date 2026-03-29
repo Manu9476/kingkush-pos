@@ -124,9 +124,10 @@ The `vercel.json` rewrite configuration keeps SPA routes working while preservin
 
 ## Important Files
 
-- `api/_lib/db.ts` - schema creation, migrations, transactions, seed/bootstrap logic
-- `api/auth/*` - login, logout, session lookup
-- `api/transactions/*` - transactional sale, refund, inventory, credit, and PO flows
+- `backend/lib/db.ts` - schema creation, migrations, transactions, seed/bootstrap logic
+- `api/auth/[action].ts` - compact Vercel entrypoint for login, logout, and session lookup
+- `api/transactions/[action].ts` - compact Vercel entrypoint for sale, refund, inventory, credit, and PO flows
+- `backend/handlers/*` - route implementations used by the grouped Vercel entrypoints
 - `api/data.ts` - authenticated compatibility data API
 - `src/data.ts` - frontend adapter that preserves the existing query style
 - `src/services/platformApi.ts` - typed client for critical backend actions
