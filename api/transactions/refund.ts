@@ -1,0 +1,206 @@
+import { requirePermission } from '../_lib/auth';
+import { insertAuditLog } from '../_lib/audit';
+import { createId, withTransaction } from '../_lib/db';
+import { readJsonBody } from '../_lib/http';
+
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  try {
+    const user = await requirePermission(req, res, ['pos']);
+    if (!user) {
+      return;
+    }
+
+    const body = await readJsonBody<{
+      saleId?: string;
+      refundReason?: string;
+      itemId?: string;
+    }>(req);
+
+    const saleId = body.saleId || '';
+    const refundReason = (body.refundReason || '').trim();
+    const itemId = body.itemId || null;
+
+    if (!saleId || !refundReason) {
+      return res.status(400).json({ error: 'Sale ID and refund reason are required' });
+    }
+
+    const result = await withTransaction(async (client) => {
+      const saleResult = await client.query<{
+        id: string;
+        customer_id: string | null;
+        customer_name: string | null;
+        is_credit: boolean;
+        is_refunded: boolean;
+        outstanding_balance: string;
+        refund_amount: string;
+      }>(
+        `
+        SELECT id, customer_id, customer_name, is_credit, is_refunded, outstanding_balance, refund_amount
+        FROM sales
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [saleId]
+      );
+      const sale = saleResult.rows[0];
+      if (!sale) {
+        throw new Error('Sale not found');
+      }
+
+      const itemsResult = await client.query<{
+        id: string;
+        product_id: string;
+        product_name: string;
+        quantity: number;
+        unit_price: string;
+        total_price: string;
+        is_refunded: boolean;
+      }>(
+        `
+        SELECT id, product_id, product_name, quantity, unit_price, total_price, is_refunded
+        FROM sale_items
+        WHERE sale_id = $1
+        FOR UPDATE
+        `,
+        [saleId]
+      );
+
+      const targetItems = itemId
+        ? itemsResult.rows.filter((item) => item.id === itemId)
+        : itemsResult.rows.filter((item) => !item.is_refunded);
+
+      if (targetItems.length === 0) {
+        throw new Error(itemId ? 'Selected sale item is not refundable' : 'No refundable items remain on this sale');
+      }
+      if (targetItems.some((item) => item.is_refunded)) {
+        throw new Error('Selected sale item is already refunded');
+      }
+
+      const refundedAt = new Date().toISOString();
+      const refundAmount = targetItems.reduce((sum, item) => sum + Number(item.total_price ?? 0), 0);
+
+      for (const item of targetItems) {
+        await client.query(
+          `
+          UPDATE sale_items
+          SET
+            is_refunded = TRUE,
+            status = 'refunded',
+            refunded_at = $2::timestamptz,
+            refunded_by = $3
+          WHERE id = $1
+          `,
+          [item.id, refundedAt, user.displayName || user.username]
+        );
+
+        await client.query(
+          `
+          UPDATE products
+          SET stock_quantity = stock_quantity + $2, updated_at = NOW()
+          WHERE id = $1
+          `,
+          [item.product_id, item.quantity]
+        );
+
+        await client.query(
+          `
+          INSERT INTO inventory_ledger (
+            id,
+            product_id,
+            type,
+            quantity,
+            quantity_delta,
+            reason,
+            source_type,
+            source_id,
+            user_id,
+            created_at
+          )
+          VALUES ($1, $2, 'stock-in', $3, $4, $5, 'refund', $6, $7, $8::timestamptz)
+          `,
+          [
+            createId('inv'),
+            item.product_id,
+            item.quantity,
+            Math.abs(item.quantity),
+            `${itemId ? 'Partial' : 'Full'} refund: Sale ${saleId}`,
+            saleId,
+            user.uid,
+            refundedAt
+          ]
+        );
+      }
+
+      const remainingUnrefunded = itemsResult.rows.filter((item) =>
+        targetItems.every((target) => target.id !== item.id) && !item.is_refunded
+      );
+      const fullyRefunded = remainingUnrefunded.length === 0;
+
+      await client.query(
+        `
+        UPDATE sales
+        SET
+          refund_amount = refund_amount + $2,
+          is_refunded = CASE WHEN $3::boolean THEN TRUE ELSE is_refunded END,
+          refunded_at = CASE WHEN $3::boolean THEN $4::timestamptz ELSE refunded_at END,
+          refunded_by = CASE WHEN $3::boolean THEN $5 ELSE refunded_by END,
+          refund_reason = CASE WHEN $3::boolean THEN $6 ELSE refund_reason END,
+          outstanding_balance = GREATEST(outstanding_balance - $2, 0)
+        WHERE id = $1
+        `,
+        [saleId, refundAmount, fullyRefunded, refundedAt, user.displayName || user.username, refundReason]
+      );
+
+      if (sale.customer_id && sale.is_credit) {
+        await client.query(
+          `
+          UPDATE customers
+          SET total_balance = GREATEST(total_balance - $2, 0), updated_at = NOW()
+          WHERE id = $1
+          `,
+          [sale.customer_id, refundAmount]
+        );
+
+        await client.query(
+          `
+          UPDATE credits
+          SET
+            outstanding_balance = GREATEST(outstanding_balance - $2, 0),
+            status = CASE WHEN outstanding_balance - $2 <= 0 THEN 'settled' ELSE status END,
+            refunded_at = CASE WHEN outstanding_balance - $2 <= 0 THEN $3::timestamptz ELSE refunded_at END,
+            updated_at = NOW()
+          WHERE sale_id = $1
+          `,
+          [saleId, refundAmount, refundedAt]
+        );
+      }
+
+      await insertAuditLog(
+        client,
+        user,
+        itemId ? 'PARTIAL_REFUND' : 'REFUND_SALE',
+        `${itemId ? 'Partially refunded' : 'Refunded'} sale ${saleId}. Reason: ${refundReason}`
+      );
+
+      return {
+        ok: true,
+        refundAmount,
+        fullyRefunded
+      };
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown server error';
+    const statusCode =
+      message.includes('required') || message.includes('refundable') || message.includes('not found')
+        ? 400
+        : 500;
+    return res.status(statusCode).json({ error: message });
+  }
+}

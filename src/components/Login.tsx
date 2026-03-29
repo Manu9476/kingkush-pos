@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { auth, googleProvider, signInWithPopup } from '../data';
 import { ArrowRight, AlertCircle, User, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../App';
 
@@ -75,31 +74,28 @@ function LoginLamp({ isOn }: { isOn: boolean }) {
 }
 
 export default function Login() {
-  const { login } = useAuth()!;
+  const { login, bootstrapRequired, bootstrap } = useAuth()!;
   const [loading, setLoading] = useState(false);
+  const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'Google login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      await login(username, password);
+      if (bootstrapRequired) {
+        if (password !== confirmPassword) {
+          throw new Error('Passwords do not match');
+        }
+        await bootstrap(displayName, username, password);
+      } else {
+        await login(username, password);
+      }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'Authentication failed');
     } finally {
@@ -152,13 +148,15 @@ export default function Login() {
             <div className="mx-auto w-full max-w-md">
               <div className="mb-6">
                 <div className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-700">
-                  KingKush Sale
+                  {bootstrapRequired ? 'First-time setup' : 'KingKush Sale'}
                 </div>
                 <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-900">
-                  Welcome back
+                  {bootstrapRequired ? 'Create superadmin' : 'Welcome back'}
                 </h2>
                 <p className="mt-2 text-sm text-slate-500">
-                  Sign in to continue to your workspace.
+                  {bootstrapRequired
+                    ? 'Set up the first administrator account for this deployment.'
+                    : 'Sign in to continue to your workspace.'}
                 </p>
               </div>
 
@@ -170,6 +168,25 @@ export default function Login() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {bootstrapRequired && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      Full Name
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        className="h-12 w-full rounded-xl border border-indigo-100 bg-indigo-50/60 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                        placeholder="Enter administrator name"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
                     Username
@@ -211,6 +228,25 @@ export default function Login() {
                   </div>
                 </div>
 
+                {bootstrapRequired && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="h-12 w-full rounded-xl border border-indigo-100 bg-indigo-50/60 pl-11 pr-12 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                        placeholder="Confirm password"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   disabled={loading}
@@ -219,35 +255,16 @@ export default function Login() {
                   {loading ? (
                     <>
                       <span className="h-[18px] w-[18px] rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                      Signing in...
+                      {bootstrapRequired ? 'Creating account...' : 'Signing in...'}
                     </>
                   ) : (
                     <>
-                      Sign in
+                      {bootstrapRequired ? 'Create account' : 'Sign in'}
                       <ArrowRight className="h-[18px] w-[18px]" />
                     </>
                   )}
                 </button>
               </form>
-
-              <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-indigo-100" />
-                <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-300">
-                  Google
-                </span>
-                <div className="h-px flex-1 bg-indigo-100" />
-              </div>
-
-              <button
-                onClick={handleGoogleLogin}
-                disabled={loading}
-                className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-indigo-100 bg-white text-sm font-semibold text-slate-700 transition-all hover:border-indigo-200 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  G
-                </span>
-                Continue with Google
-              </button>
 
               <p className="mt-5 text-center text-[11px] font-medium text-indigo-300">
                 (c) 2026 KingKush Sale

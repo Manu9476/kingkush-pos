@@ -4,11 +4,6 @@ import {
   doc, 
   getDoc, 
   setDoc, 
-  updateDoc,
-  auth,
-  updatePassword,
-  EmailAuthProvider,
-  reauthenticateWithCredential,
   handleFirestoreError, 
   OperationType 
 } from '../data';
@@ -17,6 +12,7 @@ import { useAuth } from '../App';
 import { Settings as SettingsIcon, Save, CheckCircle, Shield, Key, AlertCircle, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 
 import { recordAuditLog } from '../services/auditService';
+import { changePassword } from '../services/platformApi';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -106,8 +102,8 @@ export default function Settings() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
       return;
     }
 
@@ -118,19 +114,9 @@ export default function Settings() {
 
     setIsChangingPassword(true);
     try {
-      const authUser = auth.currentUser;
-      if (!authUser) throw new Error('User not authenticated');
-
-      // Re-authenticate user
-      const credential = EmailAuthProvider.credential(authUser.email!, currentPassword);
-      await reauthenticateWithCredential(authUser, credential);
-
-      // Update password in auth account store
-      await updatePassword(authUser, newPassword);
-
-      // Keep profile record in sync
-      await updateDoc(doc(db, 'users', user!.uid), {
-        password: newPassword
+      await changePassword({
+        currentPassword,
+        newPassword
       });
 
       await recordAuditLog(user!.uid, user!.displayName || user!.username, 'CHANGE_PASSWORD', 'User changed their account password');
@@ -142,11 +128,7 @@ export default function Settings() {
       setTimeout(() => setPasswordSuccess(false), 5000);
     } catch (error: any) {
       console.error('Password change error:', error);
-      if (error.code === 'auth/wrong-password') {
-        setPasswordError('Incorrect current password');
-      } else {
-        setPasswordError(error.message || 'Failed to change password');
-      }
+      setPasswordError(error.message || 'Failed to change password');
     } finally {
       setIsChangingPassword(false);
     }

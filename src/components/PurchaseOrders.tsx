@@ -6,11 +6,9 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc,
-  doc, 
+  doc,
   query, 
   orderBy,
-  writeBatch,
-  increment,
   handleFirestoreError,
   OperationType,
   toDate
@@ -31,6 +29,7 @@ import {
 import { recordAuditLog } from '../services/auditService';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
+import { receivePurchaseOrder } from '../services/platformApi';
 
 export default function PurchaseOrders() {
   const { user } = useAuth();
@@ -280,26 +279,7 @@ export default function PurchaseOrders() {
       message: 'Mark this order as received? This will update inventory levels and cost prices.',
       onConfirm: async () => {
         try {
-          const batch = writeBatch(db);
-          
-          // 1. Update PO status
-          batch.update(doc(db, 'purchase_orders', order.id), {
-            status: 'received',
-            receivedAt: new Date().toISOString(),
-            receivedBy: user?.displayName || user?.username
-          });
-
-          // 2. Update product quantities and buying price
-          for (const item of order.items) {
-            batch.update(doc(db, 'products', item.productId), {
-              stockQuantity: increment(item.quantity),
-              buyingPrice: item.costPrice,
-              updatedAt: new Date().toISOString()
-            });
-          }
-
-          await batch.commit();
-          await recordAuditLog(user!.uid, user!.displayName || user!.username, 'RECEIVE_PO', `Received Purchase Order ${order.id} from ${order.supplierName}`);
+          await receivePurchaseOrder(order.id);
           setSelectedOrder(null);
           toast.success('Purchase order received and inventory updated');
         } catch (error) {

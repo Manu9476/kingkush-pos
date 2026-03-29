@@ -5,20 +5,16 @@ import {
   collection, 
   query, 
   where, 
+  doc,
   getDoc,
   onSnapshot, 
-  doc, 
-  serverTimestamp, 
-  writeBatch,
-  increment,
   handleFirestoreError,
   OperationType
 } from '../data';
 import { Credit, CreditPayment, SystemSettings } from '../types';
-import { useAuth } from '../App';
+import { recordCreditPayment } from '../services/platformApi';
 
 export default function Credits() {
-  const { user } = useAuth();
   const [credits, setCredits] = useState<Credit[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,47 +68,17 @@ export default function Credits() {
 
     setIsProcessing(true);
     try {
-      const batch = writeBatch(db);
-      
-      const newOutstanding = selectedCredit.outstandingBalance - paymentAmount;
-
-      // 1. Record the payment
-      const paymentRef = doc(collection(db, 'credit_payments'));
-      const paymentData: Partial<CreditPayment> = {
+      const response = await recordCreditPayment({
         creditId: selectedCredit.id,
-        saleId: selectedCredit.saleId,
         amountPaid: paymentAmount,
-        remainingBalance: newOutstanding,
         paymentMethod,
-        reference: paymentReference,
-        timestamp: serverTimestamp(),
-        cashierId: user?.uid ?? null,
-        cashierName: user?.displayName || user?.email || 'Unknown'
-      };
-      batch.set(paymentRef, paymentData);
-
-      // 2. Update the credit record
-      const creditRef = doc(db, 'credits', selectedCredit.id);
-      batch.update(creditRef, {
-        amountPaid: increment(paymentAmount),
-        outstandingBalance: increment(-paymentAmount),
-        status: newOutstanding <= 0 ? 'settled' : 'open'
+        reference: paymentReference
       });
-
-      // 3. Update the original sale record
-      const saleRef = doc(db, 'sales', selectedCredit.saleId);
-      batch.update(saleRef, {
-        amountPaid: increment(paymentAmount),
-        outstandingBalance: increment(-paymentAmount)
-      });
-
-      await batch.commit();
       
       // Store payment info for printing
       setLastPayment({
-        id: paymentRef.id,
-        ...paymentData as CreditPayment,
-        timestamp: { toDate: () => new Date() } // Mock timestamp for immediate printing
+        ...(response.payment as CreditPayment),
+        timestamp: { toDate: () => new Date(String((response.payment as CreditPayment).timestamp)) }
       });
 
       setShowSuccess(true);

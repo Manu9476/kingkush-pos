@@ -7,13 +7,11 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
-  updateDoc, 
   doc, 
-  setDoc,
-  getDoc,
-  createUserWithEmailAndPassword
+  getDoc
 } from './data';
 import { UserProfile } from './types';
+import { bootstrapSuperadmin, getSetupStatus } from './services/platformApi';
 import { 
   LayoutDashboard, 
   Package, 
@@ -110,7 +108,9 @@ const AuthContext = createContext<{
   user: UserProfile | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
+  bootstrapRequired: boolean;
+  bootstrap: (displayName: string, username: string, password: string) => Promise<void>;
   setUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
 } | null>(null);
 
@@ -234,177 +234,84 @@ export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [bootstrapRequired, setBootstrapRequired] = useState(false);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('pos_user');
-    if (savedUser) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        getDoc(doc(db, 'users', parsed.uid)).then(docSnap => {
-          if (docSnap.exists()) {
-            const userData = docSnap.data() as UserProfile;
-            if (userData.status === 'active') {
-              setUser(userData);
-              localStorage.setItem('pos_user', JSON.stringify(userData));
-              
-              // Ensure auth for rules
-              if (!auth.currentUser) {
-                const email = `${userData.username.toLowerCase()}@pos.com`;
-                signInWithEmailAndPassword(auth, email, userData.password!).catch(console.error);
-              }
-            } else {
-              localStorage.removeItem('pos_user');
-              setUser(null);
-            }
-          } else {
-            localStorage.removeItem('pos_user');
-            setUser(null);
-          }
-          setLoading(false);
-        }).catch(() => {
-          setLoading(false);
-        });
-      } catch (e) {
-        setLoading(false);
-      }
-    }
+    let isMounted = true;
 
-    // Always listen for auth state changes (including Google login)
-    const unsubAuth = onAuthStateChanged(auth, async (authUser) => {
-      if (authUser) {
-        const isSuperAdmin = authUser.email === 'emmanuelmacharia408@gmail.com' || authUser.email === 'admin@pos.com';
-        try {
-          const userDoc = await getDoc(doc(db, 'users', authUser.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data() as UserProfile;
-            if (isSuperAdmin && userData.role !== 'superadmin') {
-              await updateDoc(doc(db, 'users', authUser.uid), { role: 'superadmin' });
-              const updated: UserProfile = { ...userData, role: 'superadmin' };
-              setUser(updated);
-              localStorage.setItem('pos_user', JSON.stringify(updated));
-            } else if (userData.status === 'active') {
-              setUser(userData);
-              localStorage.setItem('pos_user', JSON.stringify(userData));
-            }
-          } else if (isSuperAdmin) {
-            const newUser: UserProfile = {
-              uid: authUser.uid,
-              username: authUser.email === 'admin@pos.com' ? 'admin' : 'superadmin',
-              displayName: authUser.displayName || 'Super Admin',
-              role: 'superadmin',
-              permissions: [
-                'dashboard', 'pos', 'customers', 'credits', 'products', 
-                'categories', 'inventory', 'suppliers', 'labels', 
-                'reports', 'users', 'settings', 'status'
-              ],
-              status: 'active',
-              createdAt: new Date().toISOString()
-            };
-            await setDoc(doc(db, 'users', authUser.uid), newUser);
-            setUser(newUser);
-            localStorage.setItem('pos_user', JSON.stringify(newUser));
-          }
-        } catch (err) {
-          console.error('Auth sync error:', err);
+    const initialize = async () => {
+      try {
+        const setup = await getSetupStatus();
+        if (isMounted) {
+          setBootstrapRequired(setup.needsBootstrap);
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to load setup status', error);
         }
       }
-      if (!localStorage.getItem('pos_user')) {
+    };
+
+    void initialize();
+
+    const unsubAuth = onAuthStateChanged(auth, async (authUser) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (!authUser) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const userDoc = await getDoc(doc(db, 'users', authUser.uid));
+        if (!userDoc.exists()) {
+          await signOut(auth);
+          throw new Error('User profile not found');
+        }
+
+        const userData = userDoc.data() as UserProfile;
+        if (userData.status !== 'active') {
+          await signOut(auth);
+          throw new Error('Account is inactive. Please contact an administrator.');
+        }
+
+        setUser(userData);
+        setBootstrapRequired(false);
+        setAuthError(null);
+      } catch (error) {
+        setUser(null);
+        setAuthError(error instanceof Error ? error.message : 'Failed to load user profile');
+      } finally {
         setLoading(false);
       }
     });
 
-    return () => unsubAuth();
+    return () => {
+      isMounted = false;
+      unsubAuth();
+    };
   }, []);
 
   const login = async (username: string, password: string) => {
-    const email = `${username.toLowerCase()}@pos.com`;
-    
-    try {
-      // 1. Try account sign in
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (authErr: unknown) {
-      // 2. If it fails, check if it's the bootstrap admin
-      if (username.toLowerCase() === 'admin' && password === 'admin123') {
-        try {
-          const authResult = await createUserWithEmailAndPassword(auth, email, password);
-          const uid = authResult.user.uid;
-          
-          const newUser: UserProfile = {
-            uid,
-            username: 'admin',
-            password: 'admin123',
-            displayName: 'Super Admin',
-            role: 'superadmin',
-            permissions: [
-              'dashboard', 'pos', 'customers', 'credits', 'products', 
-              'categories', 'inventory', 'suppliers', 'labels', 
-              'reports', 'users', 'settings', 'status'
-            ],
-            status: 'active',
-            createdAt: new Date().toISOString()
-          };
-          await setDoc(doc(db, 'users', uid), newUser);
-          setUser(newUser);
-          localStorage.setItem('pos_user', JSON.stringify(newUser));
-          return;
-        } catch (createErr: unknown) {
-          if (createErr instanceof Error && 'code' in createErr && createErr.code === 'auth/email-already-in-use') {
-            console.error('Bootstrap admin already exists in Auth but sign-in failed.');
-          } else {
-            console.error('Bootstrap create error:', createErr);
-          }
-        }
-      }
-      throw new Error('Invalid username or password');
-    }
-
-    // 3. If auth succeeds, get the user profile
-    try {
-      const userDoc = await getDoc(doc(db, 'users', auth.currentUser!.uid));
-      if (!userDoc.exists()) {
-        // If the doc doesn't exist but the user is logged in as admin@pos.com,
-        // we can try to create the doc now.
-        if (username.toLowerCase() === 'admin') {
-          const newUser: UserProfile = {
-            uid: auth.currentUser!.uid,
-            username: 'admin',
-            password: 'admin123',
-            displayName: 'Super Admin',
-            role: 'superadmin',
-            permissions: [
-              'dashboard', 'pos', 'customers', 'credits', 'products', 
-              'categories', 'inventory', 'suppliers', 'labels', 
-              'reports', 'users', 'settings', 'status'
-            ],
-            status: 'active',
-            createdAt: new Date().toISOString()
-          };
-          await setDoc(doc(db, 'users', auth.currentUser!.uid), newUser);
-          setUser(newUser);
-          localStorage.setItem('pos_user', JSON.stringify(newUser));
-          return;
-        }
-        throw new Error('User profile not found');
-      }
-
-      const userData = userDoc.data() as UserProfile;
-      if (userData.status !== 'active') {
-        await signOut(auth);
-        throw new Error('Account is inactive. Please contact Super Admin.');
-      }
-
-      setUser(userData);
-      localStorage.setItem('pos_user', JSON.stringify(userData));
-    } catch (err: unknown) {
-      console.error('Profile fetch error:', err);
-      throw new Error(err instanceof Error ? err.message : 'Failed to load user profile');
-    }
+    setAuthError(null);
+    const email = `${username.toLowerCase()}@kingkush.local`;
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const logout = () => {
+  const bootstrap = async (displayName: string, username: string, password: string) => {
+    setAuthError(null);
+    await bootstrapSuperadmin({ displayName, username, password });
+    setBootstrapRequired(false);
+    const email = `${username.toLowerCase()}@kingkush.local`;
+    await signInWithEmailAndPassword(auth, email, password);
+  };
+
+  const logout = async () => {
     setUser(null);
-    localStorage.removeItem('pos_user');
-    signOut(auth).catch(console.error);
+    await signOut(auth);
   };
 
   const hasPermission = (permissionId: string) => {
@@ -471,7 +378,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <AuthContext.Provider value={{ user, loading, login, logout, setUser }}>
+      <AuthContext.Provider value={{ user, loading, login, logout, bootstrapRequired, bootstrap, setUser }}>
         <BrowserRouter>
           <Toaster position="top-right" richColors />
           {!user ? (

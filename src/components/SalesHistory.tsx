@@ -5,11 +5,6 @@ import {
   query, 
   orderBy, 
   onSnapshot, 
-  doc, 
-  writeBatch, 
-  increment,
-  getDocs,
-  where,
   toDate
 } from '../data';
 import { Sale, SaleItem } from '../types';
@@ -22,13 +17,11 @@ import {
   CheckCircle,
   X
 } from 'lucide-react';
-import { useAuth } from '../App';
-import { recordAuditLog } from '../services/auditService';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
+import { refundSale } from '../services/platformApi';
 
 export default function SalesHistory() {
-  const { user } = useAuth();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -94,69 +87,11 @@ export default function SalesHistory() {
       onConfirm: async () => {
         setIsRefunding(true);
         try {
-          const batch = writeBatch(db);
-          const itemRef = doc(db, `sales/${selectedSale.id}/items`, item.id);
-          const saleRef = doc(db, 'sales', selectedSale.id);
-          const productRef = doc(db, 'products', item.productId);
-
-          const itemTotal = (item.sellingPrice || item.unitPrice || 0) * item.quantity;
-
-          // 1. Mark item as refunded
-          batch.update(itemRef, {
-            isRefunded: true,
-            status: 'refunded',
-            refundedAt: new Date().toISOString(),
-            refundedBy: user?.displayName
+          await refundSale({
+            saleId: selectedSale.id,
+            refundReason,
+            itemId: item.id
           });
-
-          // 2. Update sale refund amount
-          batch.update(saleRef, {
-            refundAmount: increment(itemTotal),
-          });
-
-          // 3. Restore stock
-          batch.update(productRef, {
-            stockQuantity: increment(item.quantity),
-            updatedAt: new Date().toISOString()
-          });
-
-          // 4. Record inventory transaction
-          const transRef = doc(collection(db, 'inventory_transactions'));
-          batch.set(transRef, {
-            productId: item.productId,
-            type: 'stock-in',
-            quantity: item.quantity,
-            reason: `Partial Refund: Sale ${selectedSale.id}`,
-            timestamp: new Date(),
-            userId: user?.uid ?? null
-          });
-
-          // 5. If it was a credit sale, adjust customer balance and credit document
-          if (selectedSale.customerId) {
-            const customerRef = doc(db, 'customers', selectedSale.customerId);
-            batch.update(customerRef, {
-              totalBalance: increment(-itemTotal)
-            });
-
-            const q = query(collection(db, 'credits'), where('saleId', '==', selectedSale.id));
-            const creditSnapshot = await getDocs(q);
-            creditSnapshot.forEach(creditDoc => {
-              const currentOutstanding = creditDoc.data().outstandingBalance || 0;
-              batch.update(creditDoc.ref, {
-                outstandingBalance: Math.max(0, currentOutstanding - itemTotal)
-              });
-            });
-          }
-
-          await batch.commit();
-          
-          await recordAuditLog(
-            user!.uid, 
-            user!.displayName || user!.username, 
-            'PARTIAL_REFUND', 
-            `Refunded ${item.productName || item.name} from Sale ${selectedSale.id}. Reason: ${refundReason}`
-          );
-
           toast.success('Item refunded successfully. Stock levels updated.');
         } catch (error) {
           console.error('Partial refund error:', error);
@@ -179,73 +114,10 @@ export default function SalesHistory() {
       onConfirm: async () => {
         setIsRefunding(true);
         try {
-          const batch = writeBatch(db);
-
-          // 1. Mark sale as refunded
-          batch.update(doc(db, 'sales', selectedSale.id), {
-            isRefunded: true,
-            refundAmount: selectedSale.totalAmount,
-            refundReason,
-            refundedAt: new Date().toISOString(),
-            refundedBy: user?.displayName
+          await refundSale({
+            saleId: selectedSale.id,
+            refundReason
           });
-
-          // 2. Restore stock for each item
-          for (const item of saleItems) {
-            if (item.isRefunded) continue;
-            const itemRef = doc(db, `sales/${selectedSale.id}/items`, item.id);
-            batch.update(itemRef, {
-              isRefunded: true,
-              status: 'refunded',
-              refundedAt: new Date().toISOString(),
-              refundedBy: user?.displayName
-            });
-            
-            const productRef = doc(db, 'products', item.productId);
-            batch.update(productRef, {
-              stockQuantity: increment(item.quantity),
-              updatedAt: new Date().toISOString()
-            });
-
-            const transRef = doc(collection(db, 'inventory_transactions'));
-            batch.set(transRef, {
-              productId: item.productId,
-              type: 'stock-in',
-              quantity: item.quantity,
-              reason: `Full Refund: Sale ${selectedSale.id}`,
-              timestamp: new Date(),
-              userId: user?.uid ?? null
-            });
-          }
-
-          if (selectedSale.customerId) {
-            const customerRef = doc(db, 'customers', selectedSale.customerId);
-            const remainingAmount = selectedSale.totalAmount - (selectedSale.refundAmount || 0);
-            
-            batch.update(customerRef, {
-              totalBalance: increment(-remainingAmount)
-            });
-
-            const q = query(collection(db, 'credits'), where('saleId', '==', selectedSale.id));
-            const creditSnapshot = await getDocs(q);
-            creditSnapshot.forEach(creditDoc => {
-              batch.update(creditDoc.ref, {
-                status: 'settled',
-                outstandingBalance: 0,
-                refundedAt: new Date().toISOString()
-              });
-            });
-          }
-
-          await batch.commit();
-          
-          await recordAuditLog(
-            user!.uid, 
-            user!.displayName || user!.username, 
-            'REFUND_SALE', 
-            `Refunded Sale ${selectedSale.id}. Reason: ${refundReason}`
-          );
-
           setSelectedSale(null);
           setRefundReason('');
           toast.success('Refund processed successfully. Stock levels restored.');

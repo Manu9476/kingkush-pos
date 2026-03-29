@@ -6,11 +6,7 @@ import {
   where,
   getDocs,
   onSnapshot,
-  writeBatch,
   doc,
-  serverTimestamp,
-  increment,
-  orderBy,
   getDoc,
   handleFirestoreError,
   OperationType,
@@ -22,7 +18,7 @@ import { useAuth } from '../App';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 
-import { recordAuditLog } from '../services/auditService';
+import { createSale } from '../services/platformApi';
 
 export default function POS() {
   const { user } = useAuth();
@@ -379,160 +375,26 @@ export default function POS() {
     const processCheckout = async () => {
       setIsProcessing(true);
       try {
-        const batch = writeBatch(db);
-        const saleRef = doc(collection(db, 'sales'));
-        
-        const outstandingBalance = isCredit ? Math.max(0, total - amountPaid) : 0;
-        const excessPayment = (!isCredit && customerId && amountPaid > total) ? amountPaid - total : 0;
-
-        const saleData = {
-          cashierId: user?.uid ?? null,
-          cashierName: user?.displayName || user?.email || 'Unknown',
-          totalAmount: total,
-          taxAmount: taxAmount,
+        const response = await createSale({
+          items: cart.map((item) => ({
+            id: item.id,
+            name: item.name,
+            barcode: item.barcode,
+            quantity: item.quantity,
+            sellingPrice: item.sellingPrice
+          })),
           paymentMethod,
           amountPaid: amountPaid || 0,
-          balance: paymentMethod === 'cash' ? Math.max(0, (amountPaid || 0) - total - excessPayment) : 0,
+          customerId: customerId && customerId.trim() !== '' ? customerId : undefined,
           customerName: (customerName || '').trim(),
-          customerId: (customerId && customerId.trim() !== '') ? customerId : null,
-          reference: (reference || '').trim(),
-          isCredit,
-          outstandingBalance,
-          timestamp: serverTimestamp()
-        };
-
-        batch.set(saleRef, saleData);
-
-      // Handle Loyalty Points
-      if (customerId && settings?.loyaltyPointRate) {
-        const pointsEarned = Math.floor(total / settings.loyaltyPointRate);
-        if (pointsEarned > 0) {
-          const customerRef = doc(db, 'customers', customerId);
-          batch.update(customerRef, {
-            loyaltyPoints: increment(pointsEarned)
-          });
-        }
-      }
-
-      // Handle Credit Creation
-      if (isCredit) {
-        const creditRef = doc(collection(db, 'credits'));
-        const itemsSummary = cart.map(item => `${item.name} x${item.quantity}`).join(', ');
-        batch.set(creditRef, {
-          saleId: saleRef.id,
-          customerId: (customerId && customerId.trim() !== '') ? customerId : null,
-          customerName: (customerName || '').trim(),
-          totalAmount: total,
-          amountPaid: amountPaid || 0,
-          outstandingBalance: outstandingBalance,
-          items: itemsSummary,
-          timestamp: serverTimestamp(),
-          status: 'open'
-        });
-      }
-
-      // Handle Excess Payment Settle Existing Credits
-      if (excessPayment > 0 && customerId) {
-        const q = query(
-          collection(db, 'credits'),
-          where('customerId', '==', customerId),
-          where('status', '==', 'open'),
-          orderBy('timestamp', 'asc')
-        );
-        const snapshot = await getDocs(q);
-        let remainingExcess = excessPayment;
-
-        for (const creditDoc of snapshot.docs) {
-          if (remainingExcess <= 0) break;
-
-          const creditData = creditDoc.data();
-          const outstanding = creditData.outstandingBalance || 0;
-          const paymentToApply = Math.min(remainingExcess, outstanding);
-
-          if (paymentToApply > 0) {
-            // Update Credit Document
-            const newOutstanding = outstanding - paymentToApply;
-            batch.update(creditDoc.ref, {
-              amountPaid: increment(paymentToApply),
-              outstandingBalance: increment(-paymentToApply),
-              status: newOutstanding <= 0 ? 'settled' : 'open'
-            });
-
-            // Update Original Sale Document
-            const originalSaleRef = doc(db, 'sales', creditData.saleId);
-            batch.update(originalSaleRef, {
-              amountPaid: increment(paymentToApply),
-              outstandingBalance: increment(-paymentToApply)
-            });
-
-            // Record Credit Payment
-            const paymentRef = doc(collection(db, 'credit_payments'));
-            batch.set(paymentRef, {
-              creditId: creditDoc.id,
-              saleId: creditData.saleId,
-              amountPaid: paymentToApply,
-              remainingBalance: newOutstanding,
-              paymentMethod,
-              reference: `Sale Excess: ${saleRef.id}`,
-              timestamp: serverTimestamp(),
-              cashierId: user?.uid ?? null,
-              cashierName: user?.displayName || user?.email || 'Unknown'
-            });
-
-            remainingExcess -= paymentToApply;
-          }
-        }
-      }
-
-      for (const item of cart) {
-        const itemRef = doc(collection(db, `sales/${saleRef.id}/items`));
-        batch.set(itemRef, {
-          saleId: saleRef.id,
-          productId: item.id,
-          productName: item.name,
-          name: item.name,
-          barcode: item.barcode,
-          quantity: item.quantity,
-          unitPrice: item.sellingPrice,
-          sellingPrice: item.sellingPrice,
-          totalPrice: item.sellingPrice * item.quantity,
-          timestamp: serverTimestamp()
+          reference: (reference || '').trim()
         });
 
-        const productRef = doc(db, 'products', item.id);
-        batch.update(productRef, {
-          stockQuantity: increment(-item.quantity),
-          updatedAt: new Date().toISOString()
-        });
-
-        const transRef = doc(collection(db, 'inventory_transactions'));
-        batch.set(transRef, {
-          productId: item.id,
-          type: 'stock-out',
-          quantity: item.quantity,
-          reason: `Sale ${saleRef.id}`,
-          timestamp: serverTimestamp(),
-          userId: user?.uid ?? null
-        });
-      }
-
-      await batch.commit();
-      
-      await recordAuditLog(
-        user!.uid, 
-        user!.displayName || user!.username, 
-        'COMPLETE_SALE', 
-        `Completed sale ${saleRef.id} for KES ${total.toLocaleString()}`
-      );
-      
-      const newTotalBalance = Math.max(0, customerBalance + outstandingBalance - excessPayment);
-      
-      setLastSale({ 
-        id: saleRef.id, 
-        ...saleData, 
-        timestamp: new Date(),
-        newTotalBalance 
-      } as any);
+        const saleData = response.sale as Sale & { newTotalBalance?: number };
+        setLastSale({ 
+          ...saleData,
+          timestamp: toDate(saleData.timestamp)
+        } as Sale & { newTotalBalance?: number });
       setLastSaleItems([...cart]);
       setShowReceipt(true);
       setCart([]);

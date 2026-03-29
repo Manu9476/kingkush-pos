@@ -10,7 +10,6 @@ export interface SystemSettings {
 export interface UserProfile {
   uid: string;
   username: string;
-  password?: string;
   email?: string;
   displayName: string;
   role: 'superadmin' | 'admin' | 'cashier';
@@ -137,6 +136,12 @@ export interface InventoryTransaction {
   reason?: string;
   timestamp: any;
   userId: string;
+  supplierId?: string;
+  unitCost?: number;
+  reference?: string;
+  notes?: string;
+  sourceType?: string;
+  sourceId?: string;
 }
 
 export interface LabelBatchItem {

@@ -3,13 +3,47 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const apiRoot = path.resolve(process.cwd(), 'api');
+
+function resolveApiHandlerFile(urlPath: string) {
+  const cleanPath = urlPath.split('?')[0].replace(/^\/+/, '');
+  if (!cleanPath.startsWith('api/')) {
+    return null;
+  }
+
+  const relativePath = cleanPath.slice(4);
+  const segments = relativePath.split('/').filter(Boolean);
+  if (segments.some((segment) => segment === '.' || segment === '..')) {
+    return null;
+  }
+
+  const target = path.resolve(apiRoot, `${segments.join(path.sep)}.ts`);
+  if (!target.startsWith(apiRoot)) {
+    return null;
+  }
+
+  return fs.existsSync(target) ? target : null;
+}
+
+async function loadApiHandler(handlerFile: string) {
+  const moduleUrl = `${pathToFileURL(handlerFile).href}?v=${fs.statSync(handlerFile).mtimeMs}`;
+  const module = await import(moduleUrl);
+  if (typeof module.default !== 'function') {
+    throw new Error(`API handler "${handlerFile}" does not export a default function.`);
+  }
+  return module.default;
+}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  app.use(express.json({ limit: '2mb' }));
+  app.use(express.urlencoded({ extended: true }));
 
   if (process.env.NODE_ENV === 'development') {
     console.log('--- KingKush POS Server ---');
@@ -21,6 +55,25 @@ async function startServer() {
   // API Health Check
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', env: process.env.NODE_ENV });
+  });
+
+  app.all('/api/*', async (req, res, next) => {
+    if (req.path === '/api/health') {
+      return next();
+    }
+
+    try {
+      const handlerFile = resolveApiHandlerFile(req.path);
+      if (!handlerFile) {
+        return res.status(404).json({ error: 'API route not found' });
+      }
+
+      const handler = await loadApiHandler(handlerFile);
+      return handler(req, res);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown API runtime error';
+      return res.status(500).json({ error: message });
+    }
   });
 
   const distPath = path.resolve(process.cwd(), 'dist');

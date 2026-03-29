@@ -6,10 +6,6 @@ import {
   query, 
   orderBy, 
   limit,
-  doc,
-  writeBatch,
-  serverTimestamp,
-  increment,
   handleFirestoreError,
   OperationType
 } from '../data';
@@ -27,6 +23,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '../App';
+import { processInventoryMovement } from '../services/platformApi';
 
 export default function Inventory() {
   const { user } = useAuth();
@@ -103,27 +100,17 @@ export default function Inventory() {
     if (!receiving.productId && !receiving.barcode) return;
     setIsProcessing(true);
     try {
-      const product = products.find(p => p.id === receiving.productId || p.barcode === receiving.barcode);
-      if (!product) throw new Error('Product not found');
-
-      const batch = writeBatch(db);
-      const productRef = doc(db, 'products', product.id);
-      batch.update(productRef, {
-        stockQuantity: increment(receiving.quantity),
-        updatedAt: new Date().toISOString()
-      });
-
-      const transRef = doc(collection(db, 'inventory_transactions'));
-      batch.set(transRef, {
-        productId: product.id,
-        type: 'stock-in',
+      await processInventoryMovement({
+        actionType: 'receiving',
+        productId: receiving.productId || undefined,
+        barcode: receiving.barcode || undefined,
         quantity: receiving.quantity,
-        reason: `Supplier Receive: ${receiving.reference || receiving.notes}`,
-        timestamp: serverTimestamp(),
-        userId: user?.uid || null
+        supplierId: receiving.supplierId || undefined,
+        unitCost: receiving.unitCost || undefined,
+        reference: receiving.reference || undefined,
+        reason: receiving.reference ? `Supplier Receive: ${receiving.reference}` : receiving.notes,
+        notes: receiving.notes
       });
-
-      await batch.commit();
       setSuccessMessage('Stock received successfully!');
       setReceiving({ productId: '', barcode: '', supplierId: '', quantity: 0, unitCost: 0, reference: '', notes: 'Supplier stock received' });
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -138,27 +125,13 @@ export default function Inventory() {
     if (!stockIn.productId && !stockIn.barcode) return;
     setIsProcessing(true);
     try {
-      const product = products.find(p => p.id === stockIn.productId || p.barcode === stockIn.barcode);
-      if (!product) throw new Error('Product not found');
-
-      const batch = writeBatch(db);
-      const productRef = doc(db, 'products', product.id);
-      batch.update(productRef, {
-        stockQuantity: increment(stockIn.quantity),
-        updatedAt: new Date().toISOString()
-      });
-
-      const transRef = doc(collection(db, 'inventory_transactions'));
-      batch.set(transRef, {
-        productId: product.id,
-        type: 'stock-in',
+      await processInventoryMovement({
+        actionType: 'stock-in',
+        productId: stockIn.productId || undefined,
+        barcode: stockIn.barcode || undefined,
         quantity: stockIn.quantity,
-        reason: stockIn.reason,
-        timestamp: serverTimestamp(),
-        userId: user?.uid || null
+        reason: stockIn.reason
       });
-
-      await batch.commit();
       setSuccessMessage('Stock in applied successfully!');
       setStockIn({ productId: '', barcode: '', quantity: 0, reason: 'New stock arrived' });
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -173,27 +146,13 @@ export default function Inventory() {
     if (!adjustment.productId && !adjustment.barcode) return;
     setIsProcessing(true);
     try {
-      const product = products.find(p => p.id === adjustment.productId || p.barcode === adjustment.barcode);
-      if (!product) throw new Error('Product not found');
-
-      const batch = writeBatch(db);
-      const productRef = doc(db, 'products', product.id);
-      batch.update(productRef, {
-        stockQuantity: increment(adjustment.quantity),
-        updatedAt: new Date().toISOString()
+      await processInventoryMovement({
+        actionType: 'adjustment',
+        productId: adjustment.productId || undefined,
+        barcode: adjustment.barcode || undefined,
+        quantity: adjustment.quantity,
+        reason: adjustment.reason
       });
-
-      const transRef = doc(collection(db, 'inventory_transactions'));
-      batch.set(transRef, {
-        productId: product.id,
-        type: 'adjustment',
-        quantity: Math.abs(adjustment.quantity),
-        reason: adjustment.reason,
-        timestamp: serverTimestamp(),
-        userId: user?.uid || null
-      });
-
-      await batch.commit();
       setSuccessMessage('Adjustment applied successfully!');
       setAdjustment({ productId: '', barcode: '', quantity: 0, type: 'Adjustment', reason: 'Manual adjustment' });
       setTimeout(() => setSuccessMessage(''), 3000);

@@ -5,34 +5,27 @@ import {
   onSnapshot, 
   updateDoc, 
   doc, 
-  setDoc,
   deleteDoc,
   handleFirestoreError,
   OperationType,
-  query,
-  where,
-  getDocs,
-  auth,
-  updatePassword,
-  reauthenticateWithCredential,
-  EmailAuthProvider,
-  createLocalUserAccount,
-  updateUserAccountPassword
 } from '../data';
 import { UserProfile } from '../types';
 import { useAuth } from '../App';
 import { User, Lock, CheckCircle2, XCircle, Key, Trash2, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
+import { changePassword, createUserAccount } from '../services/platformApi';
 
 const AVAILABLE_PERMISSIONS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'pos', label: 'Sale' },
+  { id: 'sales-history', label: 'Sales History' },
   { id: 'customers', label: 'Customers' },
   { id: 'credits', label: 'Credits' },
   { id: 'products', label: 'Products' },
   { id: 'categories', label: 'Categories' },
   { id: 'inventory', label: 'Inventory' },
+  { id: 'purchase-orders', label: 'Purchase Orders' },
   { id: 'suppliers', label: 'Suppliers' },
   { id: 'labels', label: 'Labels' },
   { id: 'reports', label: 'Reports' },
@@ -44,7 +37,7 @@ const AVAILABLE_PERMISSIONS = [
 ];
 
 export default function Users() {
-  const { user: currentUser, setUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [formData, setFormData] = useState({
     fullName: '',
@@ -106,6 +99,11 @@ export default function Users() {
         setIsSubmitting(false);
         return;
       }
+      if (formData.password.length < 8) {
+        setError('Password must be at least 8 characters');
+        setIsSubmitting(false);
+        return;
+      }
 
       if (currentUser?.role === 'admin' && formData.role !== 'cashier') {
         setError('Admins can only create cashier accounts');
@@ -113,32 +111,13 @@ export default function Users() {
         return;
       }
 
-      // Check if username exists
-      const q = query(collection(db, 'users'), where('username', '==', formData.username.toLowerCase()));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        setError('Username already exists');
-        setIsSubmitting(false);
-        return;
-      }
-
-      const email = `${formData.username.toLowerCase()}@pos.com`;
-      const account = await createLocalUserAccount(email, formData.password);
-      const uid = account.uid;
-
-      const newUser: UserProfile = {
-        uid,
+      await createUserAccount({
         username: formData.username.toLowerCase(),
         password: formData.password,
         displayName: formData.fullName,
         role: formData.role,
-        permissions: formData.permissions,
-        status: 'active',
-        createdAt: new Date().toISOString()
-      };
-
-      await setDoc(doc(db, 'users', uid), newUser);
+        permissions: formData.permissions
+      });
       
       setFormData({
         fullName: '',
@@ -147,6 +126,7 @@ export default function Users() {
         role: 'cashier',
         permissions: ['dashboard', 'pos']
       });
+      toast.success('User created successfully');
     } catch (err: any) {
       console.error('Create user error:', err);
       setError(err.message || 'Failed to create user');
@@ -189,16 +169,14 @@ export default function Users() {
   const handleUpdateUserPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser || !newPassword) return;
-    
     const isSelf = editingUser.uid === currentUser?.uid;
 
-    if (!editingUser.password && !isSelf) {
-      setError('Current password not found in system records. Please contact support.');
+    if (isSelf && !currentPasswordInput) {
+      setError('Please enter your current password to verify identity.');
       return;
     }
-
-    if (isSelf && !editingUser.password && !currentPasswordInput) {
-      setError('Please enter your current password to verify identity.');
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters');
       return;
     }
 
@@ -206,36 +184,11 @@ export default function Users() {
     setError(null);
 
     try {
-      if (isSelf) {
-        // Handle self-password change
-        const firebaseUser = auth.currentUser;
-        if (!firebaseUser) throw new Error('User not authenticated');
-
-        const passwordToUse = editingUser.password || currentPasswordInput;
-        
-        try {
-          const credential = EmailAuthProvider.credential(firebaseUser.email!, passwordToUse);
-          await reauthenticateWithCredential(firebaseUser, credential);
-        } catch (reauthErr: any) {
-          if (reauthErr.code === 'auth/wrong-password') {
-            throw new Error('Incorrect current password');
-          }
-          throw reauthErr;
-        }
-
-        await updatePassword(firebaseUser, newPassword);
-        await updateDoc(doc(db, 'users', editingUser.uid), { password: newPassword });
-        
-        const updatedUser = { ...currentUser!, password: newPassword };
-        setUser(updatedUser);
-        localStorage.setItem('pos_user', JSON.stringify(updatedUser));
-      } else {
-        const email = `${editingUser.username.toLowerCase()}@pos.com`;
-        await updateUserAccountPassword(email, newPassword);
-        
-        // Keep profile record in sync
-        await updateDoc(doc(db, 'users', editingUser.uid), { password: newPassword });
-      }
+      await changePassword({
+        currentPassword: isSelf ? currentPasswordInput : undefined,
+        newPassword,
+        targetUserId: editingUser.uid
+      });
       
       setEditingUser(null);
       setNewPassword('');
@@ -502,7 +455,7 @@ export default function Users() {
                 </div>
               )}
 
-              {editingUser.uid === currentUser?.uid && !editingUser.password && (
+              {editingUser.uid === currentUser?.uid && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">Current Password</label>
                   <div className="relative">
