@@ -1,4 +1,4 @@
-const REQUEST_TIMEOUT_MS = 10000;
+const REQUEST_TIMEOUT_MS = 20000;
 const REQUEST_TIMEOUT_MESSAGE = 'The server took too long to respond. Please retry.';
 const PROTECTED_PREVIEW_MESSAGE =
   'This Vercel preview deployment is protected. Sign into the preview or use the public production URL.';

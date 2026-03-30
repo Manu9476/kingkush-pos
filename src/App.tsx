@@ -174,6 +174,16 @@ function normalizeAuthMessage(message: string) {
   return message;
 }
 
+function isTerminalProfileError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('user profile not found') ||
+    normalized.includes('account is inactive') ||
+    normalized.includes('permission denied') ||
+    normalized.includes('authentication required')
+  );
+}
+
 function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -341,10 +351,16 @@ export default function App() {
             setBootstrapRequired(false);
             setAuthError(null);
           } catch (error) {
-            setUser(null);
-            setAuthError(
-              normalizeAuthMessage(error instanceof Error ? error.message : 'Failed to load user profile')
+            const message = normalizeAuthMessage(
+              error instanceof Error ? error.message : 'Failed to load user profile'
             );
+
+            if (isTerminalProfileError(message)) {
+              setUser(null);
+              setAuthError(message);
+            } else {
+              setUser((currentUser) => currentUser ?? authUser.sessionProfile ?? null);
+            }
           } finally {
             setLoading(false);
           }
@@ -354,10 +370,17 @@ export default function App() {
             return;
           }
 
-          setUser(null);
-          setAuthError(
-            normalizeAuthMessage(error instanceof Error ? error.message : 'Failed to load user profile')
+          const message = normalizeAuthMessage(
+            error instanceof Error ? error.message : 'Failed to load user profile'
           );
+
+          if (isTerminalProfileError(message)) {
+            setUser(null);
+            setAuthError(message);
+          } else {
+            setUser((currentUser) => currentUser ?? authUser.sessionProfile ?? null);
+          }
+
           setLoading(false);
         }
       );

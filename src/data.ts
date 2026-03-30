@@ -82,7 +82,7 @@ const SNAPSHOT_CACHE_TTL_MS = 5 * 60 * 1000;
 const SNAPSHOT_POLL_INTERVAL_MS = 15000;
 const SNAPSHOT_MUTATION_REFRESH_DELAY_MS = 120;
 let scheduledSnapshotRefreshId: number | null = null;
-const AUTH_REQUEST_TIMEOUT_MS = 10000;
+const AUTH_REQUEST_TIMEOUT_MS = 20000;
 const AUTH_TIMEOUT_MESSAGE = 'The authentication service took too long to respond. Please refresh and try again.';
 const PROTECTED_PREVIEW_MESSAGE =
   'This Vercel preview deployment is protected. Sign into the preview or use the public production URL.';
