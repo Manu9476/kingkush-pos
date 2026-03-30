@@ -309,6 +309,7 @@ export default function App() {
 
       if (!authUser) {
         setUser(null);
+        setAuthError(null);
         setLoading(false);
         return;
       }
@@ -360,6 +361,7 @@ export default function App() {
               setAuthError(message);
             } else {
               setUser((currentUser) => currentUser ?? authUser.sessionProfile ?? null);
+              setAuthError(null);
             }
           } finally {
             setLoading(false);
@@ -379,6 +381,7 @@ export default function App() {
             setAuthError(message);
           } else {
             setUser((currentUser) => currentUser ?? authUser.sessionProfile ?? null);
+            setAuthError(null);
           }
 
           setLoading(false);
@@ -443,7 +446,7 @@ export default function App() {
     );
   }
 
-  if (authError) {
+  if (authError && isTerminalProfileError(authError)) {
     return (
       <div className="min-h-screen bg-indigo-900 flex items-center justify-center p-6">
         <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center space-y-6">
