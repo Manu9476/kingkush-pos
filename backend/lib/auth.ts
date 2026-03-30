@@ -15,6 +15,8 @@ export type SessionUser = {
   createdAt: string;
 };
 
+const SESSION_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+
 type RequestLike = {
   headers?: {
     cookie?: string;
@@ -36,6 +38,7 @@ type UserRow = {
   permissions: unknown;
   status: SessionUser['status'];
   created_at: string;
+  last_seen_at?: string | null;
 };
 
 export function serializeUser(row: UserRow): SessionUser {
@@ -56,6 +59,19 @@ export function hasPermission(user: SessionUser, permissionId: string) {
   return user.role === 'superadmin' || user.permissions.includes(permissionId);
 }
 
+export function shouldRefreshSessionHeartbeat(lastSeenAt: string | null | undefined, now = Date.now()) {
+  if (!lastSeenAt) {
+    return true;
+  }
+
+  const parsed = new Date(lastSeenAt).getTime();
+  if (Number.isNaN(parsed)) {
+    return true;
+  }
+
+  return now - parsed >= SESSION_HEARTBEAT_INTERVAL_MS;
+}
+
 export async function getSessionUser(req: RequestLike, res?: ResponseLike, client?: PoolClient) {
   const cookies = parseCookies(req.headers?.cookie);
   const token = cookies[SESSION_COOKIE_NAME];
@@ -74,7 +90,8 @@ export async function getSessionUser(req: RequestLike, res?: ResponseLike, clien
       u.role,
       u.permissions,
       u.status,
-      u.created_at
+      u.created_at,
+      s.last_seen_at
     FROM user_sessions s
     INNER JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = $1
@@ -92,11 +109,18 @@ export async function getSessionUser(req: RequestLike, res?: ResponseLike, clien
     return null;
   }
 
-  await queryResult(
-    'UPDATE user_sessions SET last_seen_at = NOW() WHERE token_hash = $1',
-    [hashSessionToken(token)],
-    client
-  );
+  if (shouldRefreshSessionHeartbeat(row.last_seen_at)) {
+    await queryResult(
+      `
+      UPDATE user_sessions
+      SET last_seen_at = NOW()
+      WHERE token_hash = $1
+        AND (last_seen_at IS NULL OR last_seen_at < NOW() - INTERVAL '5 minutes')
+      `,
+      [hashSessionToken(token)],
+      client
+    );
+  }
 
   return serializeUser(row);
 }

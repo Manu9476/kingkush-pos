@@ -535,6 +535,33 @@ async function warmSessionCaches(user: AuthLikeUser) {
   if (canAccessModule(profile, 'pos')) {
     warmCollection('products');
     warmCollection('customers');
+    warmCollection('branches');
+  }
+
+  if (canAccessModule(profile, 'customers')) {
+    warmCollection('customers', [orderBy('name', 'asc')]);
+    warmCollection('credits', [where('status', '==', 'open')]);
+  }
+
+  if (canAccessModule(profile, 'credits')) {
+    warmCollection('credits', [where('status', '==', 'open')]);
+  }
+
+  if (canAccessModule(profile, 'products')) {
+    warmCollection('products', [orderBy('createdAt', 'desc')]);
+    warmCollection('categories');
+    warmCollection('suppliers');
+  }
+
+  if (canAccessModule(profile, 'inventory')) {
+    warmCollection('products');
+    warmCollection('suppliers');
+    warmCollection('inventory_transactions', [orderBy('timestamp', 'desc'), limit(50)]);
+  }
+
+  if (canAccessModule(profile, 'shifts')) {
+    warmCollection('cash_shifts', [orderBy('openedAt', 'desc')]);
+    warmCollection('branches');
   }
 
   await Promise.allSettled(requests);
@@ -888,7 +915,13 @@ export function onSnapshot(
       }
     } catch (error) {
       if (active) {
-        onError?.(error);
+        try {
+          onError?.(error);
+        } catch (callbackError) {
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Snapshot error handler failed', callbackError);
+          }
+        }
       }
     }
   };

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { hashPassword, verifyPassword, createSessionToken, hashSessionToken, parseCookies } from '../backend/lib/security';
-import { hasPermission, serializeUser } from '../backend/lib/auth';
+import { hasPermission, serializeUser, shouldRefreshSessionHeartbeat } from '../backend/lib/auth';
 
 test('password hashing verifies the original password and rejects a wrong one', async () => {
   const password = 'SuperSecure123!';
@@ -52,4 +52,13 @@ test('serializeUser normalizes permission payloads and superadmin permission che
   assert.equal(hasPermission(cashier, 'pos'), true);
   assert.equal(hasPermission(cashier, 'users'), false);
   assert.equal(hasPermission(superadmin, 'users'), true);
+});
+
+test('session heartbeat refresh only happens when the session is stale', () => {
+  const now = Date.parse('2026-03-30T14:00:00.000Z');
+
+  assert.equal(shouldRefreshSessionHeartbeat(undefined, now), true);
+  assert.equal(shouldRefreshSessionHeartbeat('invalid-date', now), true);
+  assert.equal(shouldRefreshSessionHeartbeat('2026-03-30T13:58:00.000Z', now), false);
+  assert.equal(shouldRefreshSessionHeartbeat('2026-03-30T13:54:59.000Z', now), true);
 });
