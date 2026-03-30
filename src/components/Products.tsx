@@ -27,6 +27,7 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [skuPrefix, setSkuPrefix] = useState('KK-');
@@ -110,7 +111,7 @@ export default function Products() {
       );
     }
 
-    if (user.role === 'superadmin' || user.permissions.includes('inventory')) {
+    if (user.role === 'superadmin' || user.permissions.includes('inventory') || user.permissions.includes('products')) {
       unsubSups = onSnapshot(collection(db, 'suppliers'), 
         (snapshot) => setSuppliers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supplier))),
         (err) => handleFirestoreError(err, OperationType.LIST, 'suppliers')
@@ -176,29 +177,62 @@ export default function Products() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user || isSaving) return;
+
+    const normalizedName = formData.name.trim();
+    const normalizedSku = formData.sku.trim().toUpperCase();
+    const normalizedBarcode = formData.barcode.trim();
+
+    if (!normalizedName || !normalizedSku || !normalizedBarcode) {
+      toast.error('Name, SKU, and barcode are required.');
+      return;
+    }
+
+    const conflictingProduct = products.find((product) =>
+      product.id !== editingProduct?.id &&
+      (
+        product.sku.trim().toUpperCase() === normalizedSku ||
+        product.barcode.trim() === normalizedBarcode
+      )
+    );
+
+    if (conflictingProduct) {
+      toast.error(
+        conflictingProduct.sku.trim().toUpperCase() === normalizedSku
+          ? `SKU ${normalizedSku} already exists.`
+          : `Barcode ${normalizedBarcode} already exists.`
+      );
+      return;
+    }
+
+    setIsSaving(true);
     try {
       const data = {
         ...formData,
-        sku: formData.sku.toUpperCase(),
+        name: normalizedName,
+        sku: normalizedSku,
+        barcode: normalizedBarcode,
         updatedAt: new Date().toISOString()
       };
 
       if (editingProduct) {
         await updateDoc(doc(db, 'products', editingProduct.id), data);
-        await recordAuditLog(user!.uid, user!.displayName || user!.username, 'UPDATE_PRODUCT', `Updated product: ${formData.name} (SKU: ${formData.sku})`);
+        await recordAuditLog(user.uid, user.displayName || user.username, 'UPDATE_PRODUCT', `Updated product: ${data.name} (SKU: ${data.sku})`);
         toast.success('Product updated successfully');
       } else {
         await addDoc(collection(db, 'products'), {
           ...data,
           createdAt: new Date().toISOString()
         });
-        await recordAuditLog(user!.uid, user!.displayName || user!.username, 'CREATE_PRODUCT', `Created new product: ${formData.name} (SKU: ${formData.sku})`);
+        await recordAuditLog(user.uid, user.displayName || user.username, 'CREATE_PRODUCT', `Created new product: ${data.name} (SKU: ${data.sku})`);
         toast.success('Product created successfully');
       }
       resetForm();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'products');
       toast.error('Failed to save product');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -433,15 +467,17 @@ export default function Products() {
             <div className="pt-4 flex gap-4">
               <button 
                 type="submit"
-                className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                disabled={isSaving}
+                className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
               >
-                {editingProduct ? 'Update Product' : 'Save Product'}
+                {isSaving ? 'Saving...' : editingProduct ? 'Update Product' : 'Save Product'}
               </button>
               {editingProduct && (
                 <button 
                   type="button"
+                  disabled={isSaving}
                   onClick={resetForm}
-                  className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+                  className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Cancel
                 </button>
@@ -507,7 +543,23 @@ export default function Products() {
                     <td className="px-4 py-6">
                       <div className="flex flex-col gap-1 w-20">
                         <button 
-                          onClick={() => { setEditingProduct(product); setFormData(product); }}
+                          onClick={() => {
+                            setEditingProduct(product);
+                            setFormData({
+                              name: product.name,
+                              sku: product.sku,
+                              barcode: product.barcode,
+                              categoryId: product.categoryId,
+                              supplierId: product.supplierId,
+                              buyingPrice: product.buyingPrice,
+                              sellingPrice: product.sellingPrice,
+                              stockQuantity: product.stockQuantity,
+                              unitType: product.unitType,
+                              lowStockThreshold: product.lowStockThreshold,
+                              isHotItem: product.isHotItem,
+                              expiryDate: product.expiryDate || ''
+                            });
+                          }}
                           className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg hover:bg-indigo-100 transition-colors"
                         >
                           Edit

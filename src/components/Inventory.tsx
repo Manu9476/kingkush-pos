@@ -182,7 +182,7 @@ export default function Inventory() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left: Stock Actions */}
-        <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-4 xl:col-span-3 space-y-6">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 space-y-8">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">Stock Actions</h2>
@@ -439,8 +439,8 @@ export default function Inventory() {
         </div>
 
         {/* Right: Overview & Transactions */}
-        <div className="lg:col-span-8 space-y-8">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+        <div className="lg:col-span-8 xl:col-span-9 space-y-8">
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 min-h-[38rem]">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-xl font-bold text-gray-900">Stock Levels</h3>
               <div className="relative w-72">
@@ -454,7 +454,7 @@ export default function Inventory() {
                 />
               </div>
             </div>
-            <div className="overflow-x-auto max-h-[112.5] overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
+            <div className="overflow-x-auto min-h-[30rem] max-h-[30rem] overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
               <table className="w-full text-left">
                 <thead className="sticky top-0 bg-white z-10 shadow-sm text-[10px] uppercase font-bold text-gray-600 tracking-widest border-b border-gray-100">
                   <tr className="bg-white">
