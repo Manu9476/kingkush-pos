@@ -9,8 +9,6 @@ import {
   getDoc,
   doc,
   collectionGroup,
-  handleFirestoreError,
-  OperationType,
   toDate
 } from '../data';
 import { Branch, Expense, Product, Sale } from '../types';
@@ -74,6 +72,7 @@ export default function Reports() {
   const [credits, setCredits] = useState<any[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [settings, setSettings] = useState<any>(null);
+  const [reportLoadError, setReportLoadError] = useState<string | null>(null);
   const [activePeriod, setActivePeriod] = useState<ReportPeriod>('monthly');
   const [customStartDate, setCustomStartDate] = useState(() => {
     const defaultStart = new Date();
@@ -110,8 +109,11 @@ export default function Reports() {
         setCredits(creditsSnapshot.docs.map((creditDoc) => ({ id: creditDoc.id, ...creditDoc.data() })));
         setBranches(branchesSnapshot.docs.map((branchDoc) => ({ id: branchDoc.id, ...branchDoc.data() } as Branch)));
         setSettings(settingsDoc.exists() ? settingsDoc.data() : null);
+        setReportLoadError(null);
       } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'reports');
+        const message = error instanceof Error ? error.message : 'Unable to load report data';
+        setReportLoadError(message);
+        toast.error(message);
       }
     };
 
@@ -309,6 +311,11 @@ export default function Reports() {
   };
 
   const exportSalesCSV = () => {
+    if (reportLoadError) {
+      toast.error(reportLoadError);
+      return;
+    }
+
     const currentWindow = getRequiredWindow();
     if (!currentWindow) {
       return;
@@ -358,6 +365,11 @@ export default function Reports() {
   };
 
   const exportInventoryCSV = () => {
+    if (reportLoadError) {
+      toast.error(reportLoadError);
+      return;
+    }
+
     const exportData: Record<string, unknown>[] = products.map((product) => ({
       SKU: product.sku,
       Barcode: product.barcode,
@@ -390,6 +402,11 @@ export default function Reports() {
   };
 
   const exportExpensesCSV = () => {
+    if (reportLoadError) {
+      toast.error(reportLoadError);
+      return;
+    }
+
     const currentWindow = getRequiredWindow();
     if (!currentWindow) {
       return;
@@ -424,6 +441,11 @@ export default function Reports() {
   };
 
   const exportProfitCSV = async () => {
+    if (reportLoadError) {
+      toast.error(reportLoadError);
+      return;
+    }
+
     const currentWindow = getRequiredWindow();
     if (!currentWindow) {
       return;
@@ -505,13 +527,18 @@ export default function Reports() {
 
       downloadCSV(profitRows, `Profit_Report_${currentWindow.stamp}.csv`, `Profit Report (${currentWindow.label})`);
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'sales_items');
+      toast.error(error instanceof Error ? error.message : 'Unable to generate profit report');
     } finally {
       toast.dismiss(toastId);
     }
   };
 
   const exportProfitSummaryCSV = () => {
+    if (reportLoadError) {
+      toast.error(reportLoadError);
+      return;
+    }
+
     const currentWindow = getRequiredWindow();
     if (!currentWindow) {
       return;
@@ -530,6 +557,11 @@ export default function Reports() {
   };
 
   const exportProductMovementCSV = async () => {
+    if (reportLoadError) {
+      toast.error(reportLoadError);
+      return;
+    }
+
     const currentWindow = getRequiredWindow();
     if (!currentWindow) {
       return;
@@ -662,6 +694,12 @@ export default function Reports() {
           </button>
         </div>
       </div>
+
+      {reportLoadError && (
+        <div className="rounded-3xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
+          {reportLoadError}
+        </div>
+      )}
 
       <div className="bg-white rounded-4xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-8 border-b border-gray-50 flex flex-col lg:flex-row lg:items-center justify-between gap-6">

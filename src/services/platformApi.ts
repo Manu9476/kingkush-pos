@@ -1,3 +1,10 @@
+const REQUEST_TIMEOUT_MS = 10000;
+const REQUEST_TIMEOUT_MESSAGE = 'The server took too long to respond. Please retry.';
+const PROTECTED_PREVIEW_MESSAGE =
+  'This Vercel preview deployment is protected. Sign into the preview or use the public production URL.';
+const UNEXPECTED_HTML_MESSAGE =
+  'The server returned an unexpected page instead of API data. Please refresh and try again.';
+
 function emitDataMutation(url: string, method: string) {
   if (typeof window === 'undefined') {
     return;
@@ -10,31 +17,101 @@ function emitDataMutation(url: string, method: string) {
   );
 }
 
+function isAbortError(error: unknown) {
+  return (
+    (error instanceof DOMException && error.name === 'AbortError') ||
+    (error instanceof Error && error.name === 'AbortError')
+  );
+}
+
+function looksLikeHtml(contentType: string, body: string) {
+  const normalizedBody = body.trim().toLowerCase();
+  return (
+    contentType.includes('text/html') ||
+    normalizedBody.startsWith('<!doctype html') ||
+    normalizedBody.startsWith('<html')
+  );
+}
+
+function looksLikeProtectedPreview(contentType: string, body: string) {
+  const normalizedBody = body.toLowerCase();
+  return (
+    looksLikeHtml(contentType, body) &&
+    (normalizedBody.includes('vercel authentication') ||
+      normalizedBody.includes('this page requires vercel authentication') ||
+      normalizedBody.includes('sso-api') ||
+      normalizedBody.includes('authentication required'))
+  );
+}
+
+async function readResponsePayload(response: Response) {
+  const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+  const rawBody = await response.text();
+  let payload: { error?: string } | Record<string, unknown> = {};
+
+  if (rawBody.trim() && !looksLikeHtml(contentType, rawBody)) {
+    try {
+      payload = JSON.parse(rawBody) as { error?: string } | Record<string, unknown>;
+    } catch {
+      payload = {};
+    }
+  }
+
+  return { contentType, rawBody, payload };
+}
+
 async function requestJson<T>(
   url: string,
   options: RequestInit = {},
   config: { mutatesData?: boolean } = {}
 ) {
-  const response = await fetch(url, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    },
-    ...options
-  });
-
-  const payload = await response.json().catch(() => ({} as { error?: string }));
-  if (!response.ok) {
-    throw new Error(typeof payload?.error === 'string' ? payload.error : `Request failed with status ${response.status}`);
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const headers = new Headers(options.headers);
+  headers.set('Accept', 'application/json');
+  if (options.body !== undefined && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
 
-  const method = (options.method || 'GET').toUpperCase();
-  if (config.mutatesData && method !== 'GET') {
-    emitDataMutation(url, method);
-  }
+  try {
+    const response = await fetch(url, {
+      credentials: 'include',
+      ...options,
+      headers,
+      signal: controller.signal
+    });
 
-  return payload as T;
+    const { contentType, rawBody, payload } = await readResponsePayload(response);
+
+    if (looksLikeProtectedPreview(contentType, rawBody)) {
+      throw new Error(PROTECTED_PREVIEW_MESSAGE);
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        typeof payload?.error === 'string' ? payload.error : `Request failed with status ${response.status}`
+      );
+    }
+
+    if (rawBody.trim() && looksLikeHtml(contentType, rawBody)) {
+      throw new Error(UNEXPECTED_HTML_MESSAGE);
+    }
+
+    const method = (options.method || 'GET').toUpperCase();
+    if (config.mutatesData && method !== 'GET') {
+      emitDataMutation(url, method);
+    }
+
+    return payload as T;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error(REQUEST_TIMEOUT_MESSAGE);
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export async function getSetupStatus() {

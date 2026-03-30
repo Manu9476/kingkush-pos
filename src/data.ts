@@ -81,6 +81,12 @@ const SNAPSHOT_CACHE_TTL_MS = 5 * 60 * 1000;
 const SNAPSHOT_POLL_INTERVAL_MS = 15000;
 const SNAPSHOT_MUTATION_REFRESH_DELAY_MS = 120;
 let scheduledSnapshotRefreshId: number | null = null;
+const AUTH_REQUEST_TIMEOUT_MS = 10000;
+const AUTH_TIMEOUT_MESSAGE = 'The authentication service took too long to respond. Please refresh and try again.';
+const PROTECTED_PREVIEW_MESSAGE =
+  'This Vercel preview deployment is protected. Sign into the preview or use the public production URL.';
+const UNEXPECTED_AUTH_RESPONSE_MESSAGE =
+  'The server returned an unexpected response while checking your session. Please refresh and try again.';
 
 type CachedDocPayload = {
   kind: 'doc';
@@ -111,6 +117,94 @@ function normalizePath(base: string, ...segments: string[]) {
 
 function splitPath(path: string) {
   return path.split('/').filter(Boolean);
+}
+
+function isAbortError(error: unknown) {
+  return (
+    (error instanceof DOMException && error.name === 'AbortError') ||
+    (error instanceof Error && error.name === 'AbortError')
+  );
+}
+
+function looksLikeHtml(contentType: string, body: string) {
+  const normalizedBody = body.trim().toLowerCase();
+  return (
+    contentType.includes('text/html') ||
+    normalizedBody.startsWith('<!doctype html') ||
+    normalizedBody.startsWith('<html')
+  );
+}
+
+function looksLikeProtectedPreview(contentType: string, body: string) {
+  const normalizedBody = body.toLowerCase();
+  return (
+    looksLikeHtml(contentType, body) &&
+    (normalizedBody.includes('vercel authentication') ||
+      normalizedBody.includes('this page requires vercel authentication') ||
+      normalizedBody.includes('sso-api') ||
+      normalizedBody.includes('authentication required'))
+  );
+}
+
+async function requestSessionJson<T extends Record<string, unknown>>(
+  url: string,
+  options: RequestInit,
+  config: { fallbackError: string; allowUnauthorized?: boolean }
+) {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), AUTH_REQUEST_TIMEOUT_MS);
+  const headers = new Headers(options.headers);
+  headers.set('Accept', 'application/json');
+  if (options.body !== undefined && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  try {
+    const response = await fetch(url, {
+      credentials: 'include',
+      ...options,
+      headers,
+      signal: controller.signal
+    });
+
+    const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+    const rawBody = await response.text();
+
+    if (looksLikeProtectedPreview(contentType, rawBody)) {
+      throw new Error(PROTECTED_PREVIEW_MESSAGE);
+    }
+
+    let payload = {} as T & { error?: string };
+    if (rawBody.trim() && !looksLikeHtml(contentType, rawBody)) {
+      try {
+        payload = JSON.parse(rawBody) as T & { error?: string };
+      } catch {
+        payload = {} as T & { error?: string };
+      }
+    }
+
+    if (!response.ok) {
+      if (config.allowUnauthorized && response.status === 401) {
+        return {} as T;
+      }
+
+      throw new Error(typeof payload.error === 'string' ? payload.error : config.fallbackError);
+    }
+
+    if (rawBody.trim() && looksLikeHtml(contentType, rawBody)) {
+      throw new Error(UNEXPECTED_AUTH_RESPONSE_MESSAGE);
+    }
+
+    return payload;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error(AUTH_TIMEOUT_MESSAGE);
+    }
+
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
 }
 
 function getSnapshotCacheNamespace() {
@@ -449,11 +543,16 @@ async function ensureAuthHydrated() {
   if (!authHydrationPromise) {
     authHydrationPromise = (async () => {
       try {
-        const response = await fetch('/api/auth/me', {
-          method: 'GET',
-          credentials: 'include'
-        });
-        const payload = await response.json().catch(() => ({ user: null }));
+        const payload = await requestSessionJson<{ user?: any }>(
+          '/api/auth/me',
+          {
+            method: 'GET'
+          },
+          {
+            fallbackError: 'Unable to verify the current session.',
+            allowUnauthorized: true
+          }
+        );
         const user = payload.user ? toAuthLikeUser(payload.user) : null;
         setCurrentUser(user);
         if (user?.sessionProfile) {
@@ -844,18 +943,16 @@ export function onAuthStateChanged(_authObj: typeof auth, callback: AuthListener
 
 export async function signInWithEmailAndPassword(_authObj: typeof auth, email: string, password: string) {
   const username = email.split('@')[0];
-  const response = await fetch('/api/auth/login', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json'
+  const payload = await requestSessionJson<{ user: any; error?: string }>(
+    '/api/auth/login',
+    {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
     },
-    body: JSON.stringify({ username, password })
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || 'Authentication failed');
-  }
+    {
+      fallbackError: 'Authentication failed'
+    }
+  );
   const user = toAuthLikeUser(payload.user);
   setCurrentUser(user);
   if (user.sessionProfile) {
@@ -874,10 +971,16 @@ export async function signInWithPopup(_authObj: typeof auth, _provider: unknown)
 }
 
 export async function signOut(_authObj: typeof auth) {
-  await fetch('/api/auth/logout', {
-    method: 'POST',
-    credentials: 'include'
-  });
+  await requestSessionJson(
+    '/api/auth/logout',
+    {
+      method: 'POST'
+    },
+    {
+      fallbackError: 'Failed to sign out',
+      allowUnauthorized: true
+    }
+  ).catch(() => undefined);
   setCurrentUser(null);
 }
 
