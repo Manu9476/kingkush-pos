@@ -23,12 +23,15 @@ import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 import { refundSale } from '../services/platformApi';
 import { formatRefundReceiptNumber, getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
+import { useAuth } from '../App';
 
 export default function SalesHistory() {
+  const { user } = useAuth();
   const [sales, setSales] = useState<Sale[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
@@ -59,18 +62,37 @@ export default function SalesHistory() {
   };
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setLoading(true);
     const q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const salesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
       setSales(salesData);
+      setHistoryError(null);
       setLoading(false);
+    }, (error) => {
+      const message = error instanceof Error ? error.message : 'Unable to load sales history';
+      setHistoryError(message);
+      setLoading(false);
+      toast.error(message);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     const unsubscribeBranches = onSnapshot(collection(db, 'branches'), (snapshot) => {
       setBranches(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as Branch)));
+    }, (error) => {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load branches for sales history', error);
+      }
     });
 
     const fetchSettings = async () => {
@@ -86,13 +108,16 @@ export default function SalesHistory() {
 
     void fetchSettings();
     return () => unsubscribeBranches();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (selectedSale) {
       const q = query(collection(db, `sales/${selectedSale.id}/items`));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         setSaleItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SaleItem)));
+      }, (error) => {
+        const message = error instanceof Error ? error.message : 'Unable to load sale items';
+        toast.error(message);
       });
       return () => unsubscribe();
     }
@@ -230,6 +255,12 @@ export default function SalesHistory() {
           <p className="text-gray-500 font-medium">View past transactions and process returns</p>
         </div>
       </div>
+
+      {historyError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          {historyError}
+        </div>
+      )}
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row gap-4">

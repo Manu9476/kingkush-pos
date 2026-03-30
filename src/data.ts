@@ -547,6 +547,11 @@ async function warmSessionCaches(user: AuthLikeUser) {
     warmCollection('credits', [where('status', '==', 'open')]);
   }
 
+  if (canAccessModule(profile, 'sales-history')) {
+    warmCollection('sales', [orderBy('timestamp', 'desc')]);
+    warmCollection('branches');
+  }
+
   if (canAccessModule(profile, 'products')) {
     warmCollection('products', [orderBy('createdAt', 'desc')]);
     warmCollection('categories');
