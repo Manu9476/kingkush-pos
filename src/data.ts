@@ -77,6 +77,25 @@ type AuthListener = (user: AuthLikeUser | null) => void;
 const authListeners = new Set<AuthListener>();
 const snapshotRefreshers = new Set<() => void>();
 let authHydrationPromise: Promise<void> | null = null;
+const SNAPSHOT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type CachedDocPayload = {
+  kind: 'doc';
+  exists: boolean;
+  data: DocumentData | null;
+  cachedAt: number;
+};
+
+type CachedQueryPayload = {
+  kind: 'query';
+  docs: Array<{ id: string; data: DocumentData }>;
+  cachedAt: number;
+};
+
+type CachedSnapshotPayload = CachedDocPayload | CachedQueryPayload;
+type SnapshotCacheWritePayload = Omit<CachedDocPayload, 'cachedAt'> | Omit<CachedQueryPayload, 'cachedAt'>;
+
+const snapshotCache = new Map<string, CachedSnapshotPayload>();
 
 function normalizePath(base: string, ...segments: string[]) {
   const parts = [base, ...segments]
@@ -89,6 +108,84 @@ function normalizePath(base: string, ...segments: string[]) {
 
 function splitPath(path: string) {
   return path.split('/').filter(Boolean);
+}
+
+function getSnapshotCacheNamespace() {
+  return auth.currentUser?.uid || 'guest';
+}
+
+function buildSnapshotCacheStorageKey(cacheKey: string) {
+  return `kingkush-cache:${getSnapshotCacheNamespace()}:${cacheKey}`;
+}
+
+function readSnapshotCache(cacheKey: string): CachedSnapshotPayload | null {
+  const storageKey = buildSnapshotCacheStorageKey(cacheKey);
+  const fromMemory = snapshotCache.get(storageKey);
+  if (fromMemory && Date.now() - fromMemory.cachedAt < SNAPSHOT_CACHE_TTL_MS) {
+    return fromMemory;
+  }
+
+  if (typeof window === 'undefined') {
+    snapshotCache.delete(storageKey);
+    return null;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) {
+      snapshotCache.delete(storageKey);
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as CachedSnapshotPayload;
+    if (!parsed || Date.now() - parsed.cachedAt >= SNAPSHOT_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(storageKey);
+      snapshotCache.delete(storageKey);
+      return null;
+    }
+
+    snapshotCache.set(storageKey, parsed);
+    return parsed;
+  } catch {
+    snapshotCache.delete(storageKey);
+    return null;
+  }
+}
+
+function writeSnapshotCache(cacheKey: string, payload: SnapshotCacheWritePayload) {
+  const storageKey = buildSnapshotCacheStorageKey(cacheKey);
+  const cachedPayload: CachedSnapshotPayload = {
+    ...payload,
+    cachedAt: Date.now()
+  } as CachedSnapshotPayload;
+
+  snapshotCache.set(storageKey, cachedPayload);
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify(cachedPayload));
+  } catch {
+    // Ignore storage quota/privacy errors and keep the in-memory cache only.
+  }
+}
+
+function getDocCacheKey(path: string) {
+  return `doc:${path}`;
+}
+
+function getQueryCacheKey(source: CollectionRef | QueryRef) {
+  if (source.kind === 'collection') {
+    return `query:${JSON.stringify({ kind: 'collection', path: source.path })}`;
+  }
+
+  const descriptor =
+    source.source.kind === 'collection'
+      ? { kind: 'collection', path: source.source.path, constraints: source.constraints }
+      : { kind: 'collectionGroup', collectionId: source.source.collectionId, constraints: source.constraints };
+
+  return `query:${JSON.stringify(descriptor)}`;
 }
 
 function assertDocumentPath(path: string) {
@@ -254,6 +351,97 @@ function setCurrentUser(user: AuthLikeUser | null) {
   }
 }
 
+function canAccessModule(profile: UserProfile | undefined, permissionId: string) {
+  if (!profile) {
+    return false;
+  }
+
+  return profile.role === 'superadmin' || profile.permissions.includes(permissionId);
+}
+
+async function warmSessionCaches(user: AuthLikeUser) {
+  const profile = user.sessionProfile;
+  if (!profile) {
+    return;
+  }
+
+  const requests: Array<Promise<unknown>> = [];
+  const warmedKeys = new Set<string>();
+
+  const warmDoc = (path: string) => {
+    const cacheKey = getDocCacheKey(path);
+    if (warmedKeys.has(cacheKey)) {
+      return;
+    }
+    warmedKeys.add(cacheKey);
+
+    requests.push(
+      dataApi<{ exists: boolean; data: DocumentData | null }>({ mode: 'doc', path })
+        .then((payload) => {
+          writeSnapshotCache(cacheKey, {
+            kind: 'doc',
+            exists: payload.exists,
+            data: payload.data
+          });
+        })
+        .catch(() => undefined)
+    );
+  };
+
+  const warmCollection = (path: string, constraints: QueryConstraint[] = []) => {
+    const cacheKey =
+      constraints.length === 0
+        ? getQueryCacheKey(createCollectionRef(path))
+        : getQueryCacheKey(query(createCollectionRef(path), ...constraints));
+
+    if (warmedKeys.has(cacheKey)) {
+      return;
+    }
+    warmedKeys.add(cacheKey);
+
+    requests.push(
+      dataApi<{ docs: Array<{ id: string; data: DocumentData }> }>({
+        mode: 'query',
+        source: { kind: 'collection', path },
+        constraints
+      })
+        .then((payload) => {
+          writeSnapshotCache(cacheKey, {
+            kind: 'query',
+            docs: payload.docs
+          });
+        })
+        .catch(() => undefined)
+    );
+  };
+
+  writeSnapshotCache(getDocCacheKey(`users/${profile.uid}`), {
+    kind: 'doc',
+    exists: true,
+    data: profile
+  });
+
+  warmDoc('settings/system');
+  warmCollection('branches');
+  warmDoc(`users/${profile.uid}`);
+
+  if (canAccessModule(profile, 'dashboard')) {
+    warmCollection('sales');
+    warmCollection('sales', [orderBy('timestamp', 'desc'), limit(10)]);
+    warmCollection('credits');
+    warmCollection('expenses');
+    warmCollection('credit_payments', [orderBy('timestamp', 'desc'), limit(20)]);
+    warmCollection('products');
+  }
+
+  if (canAccessModule(profile, 'pos')) {
+    warmCollection('products');
+    warmCollection('customers');
+  }
+
+  await Promise.allSettled(requests);
+}
+
 async function ensureAuthHydrated() {
   if (!authHydrationPromise) {
     authHydrationPromise = (async () => {
@@ -263,7 +451,16 @@ async function ensureAuthHydrated() {
           credentials: 'include'
         });
         const payload = await response.json().catch(() => ({ user: null }));
-        setCurrentUser(payload.user ? toAuthLikeUser(payload.user) : null);
+        const user = payload.user ? toAuthLikeUser(payload.user) : null;
+        setCurrentUser(user);
+        if (user?.sessionProfile) {
+          writeSnapshotCache(getDocCacheKey(`users/${user.uid}`), {
+            kind: 'doc',
+            exists: true,
+            data: user.sessionProfile
+          });
+          void warmSessionCaches(user);
+        }
       } catch {
         setCurrentUser(null);
       }
@@ -316,6 +513,32 @@ function makeQuerySnapshot(docs: SnapshotDoc[]): QuerySnapshot {
     empty: docs.length === 0,
     forEach: (cb) => docs.forEach(cb)
   };
+}
+
+function getQueryDocPath(source: CollectionRef | QueryRef, entryId: string) {
+  if (source.kind === 'collection') {
+    return `${source.path}/${entryId}`;
+  }
+
+  if (source.source.kind === 'collection') {
+    return `${source.source.path}/${entryId}`;
+  }
+
+  return `sales/placeholder/items/${entryId}`;
+}
+
+function makeCachedDocumentSnapshot(ref: DocumentRef, payload: CachedDocPayload): DocumentSnapshot {
+  return {
+    id: ref.id,
+    ref,
+    exists: () => payload.exists,
+    data: () => normalizeData(payload.data || {})
+  };
+}
+
+function makeCachedQuerySnapshot(source: CollectionRef | QueryRef, payload: CachedQueryPayload): QuerySnapshot {
+  const docs = payload.docs.map((entry) => makeSnapshotDoc(getQueryDocPath(source, entry.id), entry.data));
+  return makeQuerySnapshot(docs);
 }
 
 function notifySnapshots() {
@@ -372,6 +595,12 @@ export async function getDoc(ref: DocumentRef): Promise<DocumentSnapshot> {
     path: ref.path
   });
 
+  writeSnapshotCache(getDocCacheKey(ref.path), {
+    kind: 'doc',
+    exists: payload.exists,
+    data: payload.data
+  });
+
   return {
     id: ref.id,
     ref,
@@ -396,16 +625,12 @@ export async function getDocs(source: CollectionRef | QueryRef): Promise<QuerySn
     constraints: source.kind === 'collection' ? [] : source.constraints
   });
 
-  const docs = payload.docs.map((entry) =>
-    makeSnapshotDoc(
-      source.kind === 'collection'
-        ? `${source.path}/${entry.id}`
-        : source.source.kind === 'collection'
-          ? `${source.source.path}/${entry.id}`
-          : `sales/placeholder/items/${entry.id}`,
-      entry.data
-    )
-  );
+  writeSnapshotCache(getQueryCacheKey(source), {
+    kind: 'query',
+    docs: payload.docs
+  });
+
+  const docs = payload.docs.map((entry) => makeSnapshotDoc(getQueryDocPath(source, entry.id), entry.data));
 
   return makeQuerySnapshot(docs);
 }
@@ -511,6 +736,16 @@ export function onSnapshot(
   onError?: (error: unknown) => void
 ) {
   let active = true;
+  const cacheKey = source.kind === 'document' ? getDocCacheKey(source.path) : getQueryCacheKey(source);
+
+  const cachedPayload = readSnapshotCache(cacheKey);
+  if (cachedPayload) {
+    if (source.kind === 'document' && cachedPayload.kind === 'doc') {
+      onNext(makeCachedDocumentSnapshot(source, cachedPayload) as never);
+    } else if (source.kind !== 'document' && cachedPayload.kind === 'query') {
+      onNext(makeCachedQuerySnapshot(source, cachedPayload) as never);
+    }
+  }
 
   const refresh = async () => {
     try {
@@ -573,6 +808,14 @@ export async function signInWithEmailAndPassword(_authObj: typeof auth, email: s
   }
   const user = toAuthLikeUser(payload.user);
   setCurrentUser(user);
+  if (user.sessionProfile) {
+    writeSnapshotCache(getDocCacheKey(`users/${user.uid}`), {
+      kind: 'doc',
+      exists: true,
+      data: user.sessionProfile
+    });
+    void warmSessionCaches(user);
+  }
   return { user };
 }
 
