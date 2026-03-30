@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db, auth, doc, getDoc } from '../data';
 import { Shield, CheckCircle, XCircle, AlertTriangle, RefreshCw, Activity } from 'lucide-react';
+import { getSetupStatus } from '../services/platformApi';
 
 interface HealthStatus {
   service: string;
@@ -42,13 +43,10 @@ export default function ReadinessPanel() {
     // 2.5 Check Cloud Database
     let cloudStatus: HealthStatus = { service: 'Cloud Database (Neon)', status: 'loading', message: 'Pinging setup endpoint...' };
     try {
-      const res = await fetch('/api/setup/status', { method: 'GET', headers: { Accept: 'application/json' } });
-      if (res.ok) {
-        cloudStatus = { service: 'Cloud Database (Neon)', status: 'ok', message: 'Connected and responding successfully' };
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        cloudStatus = { service: 'Cloud Database (Neon)', status: 'error', message: errData.error || `HTTP Error ${res.status}: Check Vercel Logs` };
-      }
+      const setup = await getSetupStatus();
+      cloudStatus = setup.needsBootstrap
+        ? { service: 'Cloud Database (Neon)', status: 'warning', message: 'Connected, but first-time bootstrap is still required' }
+        : { service: 'Cloud Database (Neon)', status: 'ok', message: 'Connected and responding successfully' };
     } catch (err: any) {
       cloudStatus = { service: 'Cloud Database (Neon)', status: 'error', message: err.message || 'Network fetch failed' };
     }
@@ -79,7 +77,7 @@ export default function ReadinessPanel() {
   };
 
   useEffect(() => {
-    checkHealth();
+    void checkHealth();
   }, []);
 
   return (

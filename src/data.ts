@@ -77,6 +77,7 @@ type AuthListener = (user: AuthLikeUser | null) => void;
 const authListeners = new Set<AuthListener>();
 const snapshotRefreshers = new Set<() => void | Promise<void>>();
 let authHydrationPromise: Promise<void> | null = null;
+let authHydrated = false;
 const SNAPSHOT_CACHE_TTL_MS = 5 * 60 * 1000;
 const SNAPSHOT_POLL_INTERVAL_MS = 15000;
 const SNAPSHOT_MUTATION_REFRESH_DELAY_MS = 120;
@@ -565,6 +566,8 @@ async function ensureAuthHydrated() {
         }
       } catch {
         setCurrentUser(null);
+      } finally {
+        authHydrated = true;
       }
     })();
   }
@@ -935,7 +938,11 @@ export function toDate(value: unknown): Date {
 
 export function onAuthStateChanged(_authObj: typeof auth, callback: AuthListener) {
   authListeners.add(callback);
-  void ensureAuthHydrated().then(() => callback(auth.currentUser));
+  if (authHydrated) {
+    callback(auth.currentUser);
+  } else {
+    void ensureAuthHydrated();
+  }
   return () => {
     authListeners.delete(callback);
   };
