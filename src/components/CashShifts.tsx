@@ -87,6 +87,16 @@ const CASH_MOVEMENT_TYPES = [
   { id: 'safe-drop', label: 'Safe Drop' }
 ] as const;
 
+const SHIFT_STATUS_POLL_INTERVAL_MS = 30000;
+
+function formatMoneyInput(amount: number) {
+  if (!Number.isFinite(amount)) {
+    return '0';
+  }
+
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+}
+
 export default function CashShifts() {
   const { user } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -121,18 +131,29 @@ export default function CashShifts() {
     user?.role === 'admin' ||
     user?.permissions?.includes('reports')
   );
+  const assignedBranchName = useMemo(() => {
+    if (!user?.branchId) {
+      return 'system default branch';
+    }
+
+    return branches.find((branch) => branch.id === user.branchId)?.name || user.branchId;
+  }, [branches, user?.branchId]);
 
   const refreshShiftStatus = async () => {
     try {
       const payload = await getShiftStatus();
       setCurrentShift(payload.shift);
       setLiveSummary(payload.summary);
-      if (payload.summary && closeForm.closingCountedCash === '') {
-        setCloseForm((current) => ({
+      setCloseForm((current) => {
+        if (!payload.summary || current.closingCountedCash.trim() !== '') {
+          return current;
+        }
+
+        return {
           ...current,
-          closingCountedCash: String(Math.round(payload.summary.expectedCash))
-        }));
-      }
+          closingCountedCash: formatMoneyInput(payload.summary.expectedCash)
+        };
+      });
     } catch (error: any) {
       if (error?.message?.includes('Authentication')) {
         return;
@@ -145,8 +166,19 @@ export default function CashShifts() {
     void refreshShiftStatus();
     const intervalId = window.setInterval(() => {
       void refreshShiftStatus();
-    }, 10000);
-    return () => window.clearInterval(intervalId);
+    }, SHIFT_STATUS_POLL_INTERVAL_MS);
+    const handleExternalRefresh = () => {
+      void refreshShiftStatus();
+    };
+
+    window.addEventListener('focus', handleExternalRefresh);
+    window.addEventListener('kingkush:data-mutated', handleExternalRefresh as EventListener);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleExternalRefresh);
+      window.removeEventListener('kingkush:data-mutated', handleExternalRefresh as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -215,16 +247,29 @@ export default function CashShifts() {
 
   const handleOpenShift = async (event: React.FormEvent) => {
     event.preventDefault();
+    const openingFloat = Number(openForm.openingFloat || 0);
+    if (!Number.isFinite(openingFloat) || openingFloat < 0) {
+      toast.error('Enter a valid opening float before opening the shift.');
+      return;
+    }
+
     setIsOpening(true);
     try {
-      await openShift({
-        openingFloat: Number(openForm.openingFloat || 0),
+      const payload = await openShift({
+        openingFloat,
         notes: openForm.notes.trim(),
         openingReference: openForm.openingReference.trim()
       });
+      setCurrentShift(payload.shift as CashShift);
+      setLiveSummary(payload.summary as LiveShiftSummary);
+      setCloseForm({
+        closingCountedCash: formatMoneyInput(Number(payload.summary?.expectedCash ?? openingFloat)),
+        notes: ''
+      });
+      setSelectedReport(null);
       toast.success('Cashier shift opened');
       setOpenForm({ openingFloat: '0', notes: '', openingReference: '' });
-      await refreshShiftStatus();
+      void refreshShiftStatus();
     } catch (error: any) {
       toast.error(error.message || 'Unable to open shift');
     } finally {
@@ -234,12 +279,19 @@ export default function CashShifts() {
 
   const handleRecordMovement = async (event: React.FormEvent) => {
     event.preventDefault();
+    const amount = Number(movementForm.amount || 0);
+    const reason = movementForm.reason.trim();
+    if (!Number.isFinite(amount) || amount <= 0 || !reason) {
+      toast.error('Enter a positive amount and a reason before recording the movement.');
+      return;
+    }
+
     setIsRecordingMovement(true);
     try {
       await recordCashMovement({
         type: movementForm.type,
-        amount: Number(movementForm.amount || 0),
-        reason: movementForm.reason.trim(),
+        amount,
+        reason,
         reference: movementForm.reference.trim()
       });
       toast.success('Cash movement recorded');
@@ -249,7 +301,7 @@ export default function CashShifts() {
         reason: '',
         reference: ''
       });
-      await refreshShiftStatus();
+      void refreshShiftStatus();
     } catch (error: any) {
       toast.error(error.message || 'Unable to record movement');
     } finally {
@@ -259,15 +311,25 @@ export default function CashShifts() {
 
   const handleCloseShift = async (event: React.FormEvent) => {
     event.preventDefault();
+    const closingCountedCash = Number(closeForm.closingCountedCash || 0);
+    if (!Number.isFinite(closingCountedCash) || closingCountedCash < 0) {
+      toast.error('Enter a valid counted cash amount before closing the shift.');
+      return;
+    }
+
     setIsClosing(true);
     try {
       await closeShift({
-        closingCountedCash: Number(closeForm.closingCountedCash || 0),
+        closingCountedCash,
         notes: closeForm.notes.trim()
       });
+      setCurrentShift(null);
+      setLiveSummary(null);
+      setMovements([]);
+      setSelectedReport(null);
       toast.success('Cashier shift closed');
       setCloseForm({ closingCountedCash: '', notes: '' });
-      await refreshShiftStatus();
+      void refreshShiftStatus();
     } catch (error: any) {
       toast.error(error.message || 'Unable to close shift');
     } finally {
@@ -293,6 +355,9 @@ export default function CashShifts() {
                 <h2 className="text-xl font-bold text-gray-900">Open a cashier shift</h2>
                 <p className="text-sm text-gray-500">No active shift detected. Sales and cash reconciliation should start with an opening float.</p>
               </div>
+            </div>
+            <div className="mt-4 rounded-2xl bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700">
+              This shift will open under {assignedBranchName}.
             </div>
           </div>
 
@@ -348,7 +413,7 @@ export default function CashShifts() {
                   <h2 className="text-xl font-bold text-gray-900">Active Shift</h2>
                 </div>
                 <p className="mt-1 text-sm text-gray-500">
-                  {currentBranchName} • Opened {toDate(currentShift.openedAt).toLocaleString()}
+                  {currentBranchName} | Opened {toDate(currentShift.openedAt).toLocaleString()}
                 </p>
               </div>
               <div className="flex flex-col items-start gap-3 md:items-end">
@@ -466,7 +531,7 @@ export default function CashShifts() {
                         <div>
                           <p className="text-sm font-bold text-gray-900">{movement.reason}</p>
                           <p className="text-xs text-gray-500">
-                            {movement.type} • {toDate(movement.timestamp).toLocaleString()}
+                            {movement.type} | {toDate(movement.timestamp).toLocaleString()}
                           </p>
                         </div>
                         <p className="text-sm font-black text-gray-900">KES {movement.amount.toLocaleString()}</p>
@@ -626,7 +691,7 @@ export default function CashShifts() {
             <div>
               <h2 className="text-xl font-bold text-gray-900">Shift Report Preview</h2>
               <p className="text-sm text-gray-500">
-                {selectedReport.shift.branchName || 'Unassigned branch'} • {selectedReport.shift.userName} • {formatShiftReportNumber(selectedReport.shift.id)}
+                {selectedReport.shift.branchName || 'Unassigned branch'} | {selectedReport.shift.userName} | {formatShiftReportNumber(selectedReport.shift.id)}
               </p>
             </div>
             <button
@@ -694,7 +759,7 @@ export default function CashShifts() {
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <p className="text-sm font-bold text-gray-900">{movement.reason}</p>
-                            <p className="text-xs text-gray-500">{movement.type} • {toDate(movement.timestamp).toLocaleString()}</p>
+                            <p className="text-xs text-gray-500">{movement.type} | {toDate(movement.timestamp).toLocaleString()}</p>
                           </div>
                           <p className="text-sm font-black text-gray-900">KES {movement.amount.toLocaleString()}</p>
                         </div>
@@ -719,7 +784,7 @@ export default function CashShifts() {
                             <div>
                               <p className="text-sm font-bold text-gray-900">Sale #{sale.id.slice(-8).toUpperCase()}</p>
                               <p className="text-xs text-gray-500">
-                                {sale.customerName || 'Walk-in Customer'} • {(sale.tenderMethod || sale.paymentMethod).toUpperCase()} • {toDate(sale.soldAt).toLocaleString()}
+                                {sale.customerName || 'Walk-in Customer'} | {(sale.tenderMethod || sale.paymentMethod).toUpperCase()} | {toDate(sale.soldAt).toLocaleString()}
                               </p>
                             </div>
                             <div className="text-right">
@@ -737,7 +802,7 @@ export default function CashShifts() {
                             <div>
                               <p className="text-sm font-bold text-blue-900">Credit payment #{payment.id.slice(-8).toUpperCase()}</p>
                               <p className="text-xs text-blue-700">
-                                {payment.paymentMethod.toUpperCase()} • {toDate(payment.paidAt).toLocaleString()}
+                                {payment.paymentMethod.toUpperCase()} | {toDate(payment.paidAt).toLocaleString()}
                               </p>
                             </div>
                             <p className="text-sm font-black text-blue-900">KES {payment.amountPaid.toLocaleString()}</p>

@@ -245,6 +245,8 @@ export default async function handler(req: any, res: any) {
         return {
           shift: {
             id: shift.id,
+            userId: user.uid,
+            userName: user.displayName || user.username,
             branchId: shift.branch_id,
             openingFloat: Number(shift.opening_float ?? 0),
             status: shift.status,
@@ -253,7 +255,8 @@ export default async function handler(req: any, res: any) {
             closingCountedCash: shift.closing_counted_cash === null ? undefined : Number(shift.closing_counted_cash),
             expectedCash: shift.expected_cash === null ? undefined : Number(shift.expected_cash),
             variance: shift.variance === null ? undefined : Number(shift.variance),
-            openedAt: shift.opened_at
+            openedAt: shift.opened_at,
+            updatedAt: shift.opened_at
           },
           summary
         };
@@ -319,12 +322,15 @@ export default async function handler(req: any, res: any) {
         return {
           shift: {
             id: shiftId,
+            userId: user.uid,
+            userName: user.displayName || user.username,
             branchId,
             openingFloat,
             status: 'open',
             notes,
             openingReference,
-            openedAt
+            openedAt,
+            updatedAt: openedAt
           },
           summary: {
             shiftId,
@@ -397,6 +403,8 @@ export default async function handler(req: any, res: any) {
       return {
         shift: {
           id: shift.id,
+          userId: user.uid,
+          userName: user.displayName || user.username,
           branchId: summary.branchId,
           openingFloat: summary.openingFloat,
           status: 'closed',
@@ -405,7 +413,8 @@ export default async function handler(req: any, res: any) {
           closingCountedCash,
           expectedCash: summary.expectedCash,
           variance,
-          closingNotes
+          closingNotes,
+          updatedAt: closedAt
         },
         summary: {
           ...summary,
