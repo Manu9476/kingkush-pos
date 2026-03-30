@@ -1,4 +1,20 @@
-async function requestJson<T>(url: string, options: RequestInit = {}) {
+function emitDataMutation(url: string, method: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent('kingkush:data-mutated', {
+      detail: { url, method }
+    })
+  );
+}
+
+async function requestJson<T>(
+  url: string,
+  options: RequestInit = {},
+  config: { mutatesData?: boolean } = {}
+) {
   const response = await fetch(url, {
     credentials: 'include',
     headers: {
@@ -12,6 +28,12 @@ async function requestJson<T>(url: string, options: RequestInit = {}) {
   if (!response.ok) {
     throw new Error(typeof payload?.error === 'string' ? payload.error : `Request failed with status ${response.status}`);
   }
+
+  const method = (options.method || 'GET').toUpperCase();
+  if (config.mutatesData && method !== 'GET') {
+    emitDataMutation(url, method);
+  }
+
   return payload as T;
 }
 
@@ -30,7 +52,7 @@ export async function bootstrapSuperadmin(input: {
   return requestJson<{ user: unknown }>('/api/setup/bootstrap', {
     method: 'POST',
     body: JSON.stringify(input)
-  });
+  }, { mutatesData: true });
 }
 
 export async function createSale(input: {
@@ -47,7 +69,7 @@ export async function createSale(input: {
   }>('/api/transactions/sale', {
     method: 'POST',
     body: JSON.stringify(input)
-  });
+  }, { mutatesData: true });
 }
 
 export async function refundSale(input: {
@@ -63,7 +85,7 @@ export async function refundSale(input: {
   }>('/api/transactions/refund', {
     method: 'POST',
     body: JSON.stringify(input)
-  });
+  }, { mutatesData: true });
 }
 
 export async function processInventoryMovement(input: {
@@ -80,7 +102,7 @@ export async function processInventoryMovement(input: {
   return requestJson<{ ok: true; productId: string; resultingStock: number }>('/api/transactions/inventory', {
     method: 'POST',
     body: JSON.stringify(input)
-  });
+  }, { mutatesData: true });
 }
 
 export async function getShiftStatus() {
@@ -114,7 +136,7 @@ export async function openShift(input: {
       action: 'open',
       ...input
     })
-  });
+  }, { mutatesData: true });
 }
 
 export async function closeShift(input: {
@@ -130,7 +152,7 @@ export async function closeShift(input: {
       action: 'close',
       ...input
     })
-  });
+  }, { mutatesData: true });
 }
 
 export async function recordCashMovement(input: {
@@ -146,7 +168,7 @@ export async function recordCashMovement(input: {
   }>('/api/transactions/cash-movement', {
     method: 'POST',
     body: JSON.stringify(input)
-  });
+  }, { mutatesData: true });
 }
 
 export async function createExpense(input: {
@@ -161,7 +183,7 @@ export async function createExpense(input: {
   }>('/api/transactions/expense', {
     method: 'POST',
     body: JSON.stringify(input)
-  });
+  }, { mutatesData: true });
 }
 
 export async function recordCreditPayment(input: {
@@ -175,14 +197,14 @@ export async function recordCreditPayment(input: {
   }>('/api/transactions/credit-payment', {
     method: 'POST',
     body: JSON.stringify(input)
-  });
+  }, { mutatesData: true });
 }
 
 export async function receivePurchaseOrder(orderId: string) {
   return requestJson<{ ok: true; orderId: string }>('/api/transactions/purchase-order-receive', {
     method: 'POST',
     body: JSON.stringify({ orderId })
-  });
+  }, { mutatesData: true });
 }
 
 export async function createUserAccount(input: {
@@ -196,7 +218,7 @@ export async function createUserAccount(input: {
   return requestJson<{ user: Record<string, unknown> }>('/api/admin/users', {
     method: 'POST',
     body: JSON.stringify(input)
-  });
+  }, { mutatesData: true });
 }
 
 export async function changePassword(input: {
@@ -207,7 +229,7 @@ export async function changePassword(input: {
   return requestJson<{ ok: true }>('/api/account/password', {
     method: 'POST',
     body: JSON.stringify(input)
-  });
+  }, { mutatesData: true });
 }
 
 export async function getProductMovementReport(input: {
@@ -269,5 +291,5 @@ export async function dataApi<T>(body: Record<string, unknown>) {
   return requestJson<T>('/api/data', {
     method: 'POST',
     body: JSON.stringify(body)
-  });
+  }, { mutatesData: body.mode === 'write' });
 }

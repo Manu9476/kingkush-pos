@@ -75,9 +75,12 @@ type DocumentSnapshot = {
 type AuthListener = (user: AuthLikeUser | null) => void;
 
 const authListeners = new Set<AuthListener>();
-const snapshotRefreshers = new Set<() => void>();
+const snapshotRefreshers = new Set<() => void | Promise<void>>();
 let authHydrationPromise: Promise<void> | null = null;
 const SNAPSHOT_CACHE_TTL_MS = 5 * 60 * 1000;
+const SNAPSHOT_POLL_INTERVAL_MS = 15000;
+const SNAPSHOT_MUTATION_REFRESH_DELAY_MS = 120;
+let scheduledSnapshotRefreshId: number | null = null;
 
 type CachedDocPayload = {
   kind: 'doc';
@@ -541,10 +544,36 @@ function makeCachedQuerySnapshot(source: CollectionRef | QueryRef, payload: Cach
   return makeQuerySnapshot(docs);
 }
 
-function notifySnapshots() {
-  for (const refresher of snapshotRefreshers) {
-    refresher();
+function canRefreshSnapshotsNow() {
+  if (typeof document === 'undefined') {
+    return true;
   }
+
+  return document.visibilityState === 'visible';
+}
+
+function runSnapshotRefreshers() {
+  scheduledSnapshotRefreshId = null;
+  if (!canRefreshSnapshotsNow()) {
+    return;
+  }
+
+  for (const refresher of snapshotRefreshers) {
+    void refresher();
+  }
+}
+
+function notifySnapshots(delay = SNAPSHOT_MUTATION_REFRESH_DELAY_MS) {
+  if (typeof window === 'undefined') {
+    runSnapshotRefreshers();
+    return;
+  }
+
+  if (scheduledSnapshotRefreshId !== null) {
+    window.clearTimeout(scheduledSnapshotRefreshId);
+  }
+
+  scheduledSnapshotRefreshId = window.setTimeout(runSnapshotRefreshers, delay);
 }
 
 export function collection(base: DBRef | DocumentRef, path: string) {
@@ -763,7 +792,12 @@ export function onSnapshot(
   };
 
   void refresh();
-  const intervalId = window.setInterval(refresh, 3000);
+  const intervalId = window.setInterval(() => {
+    if (!canRefreshSnapshotsNow()) {
+      return;
+    }
+    void refresh();
+  }, SNAPSHOT_POLL_INTERVAL_MS);
   snapshotRefreshers.add(refresh);
 
   return () => {
@@ -771,6 +805,22 @@ export function onSnapshot(
     window.clearInterval(intervalId);
     snapshotRefreshers.delete(refresh);
   };
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('kingkush:data-mutated', () => {
+    notifySnapshots();
+  });
+
+  window.addEventListener('focus', () => {
+    notifySnapshots(0);
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      notifySnapshots(0);
+    }
+  });
 }
 
 export function toDate(value: unknown): Date {

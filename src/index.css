@@ -76,6 +76,8 @@
   input[type="button"],
   input[type="reset"] {
     cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Ensure disabled buttons show the default arrow or not-allowed cursor */
