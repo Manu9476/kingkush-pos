@@ -3,6 +3,14 @@ import type { FormEvent } from 'react';
 import { ArrowRight, AlertCircle, User, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../App';
 
+function normalizeLoginMessage(message: string) {
+  if (message.toLowerCase().includes('tuple concurrently updated')) {
+    return 'The system is finishing a database update. Please retry in a few seconds.';
+  }
+
+  return message;
+}
+
 function LoginLamp({ isOn }: { isOn: boolean }) {
   return (
     <div className="relative mx-auto h-64 w-64">
@@ -97,7 +105,7 @@ export default function Login() {
         await login(username, password);
       }
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'Authentication failed');
+      setError(normalizeLoginMessage(error instanceof Error ? error.message : 'Authentication failed'));
     } finally {
       setLoading(false);
     }

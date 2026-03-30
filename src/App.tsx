@@ -166,6 +166,14 @@ function userHasAnyPermission(user: UserProfile | null | undefined, permissionId
   return permissionIds.some((permissionId) => user.permissions?.includes(permissionId));
 }
 
+function normalizeAuthMessage(message: string) {
+  if (message.toLowerCase().includes('tuple concurrently updated')) {
+    return 'The system is finishing a database update. Please retry in a few seconds.';
+  }
+
+  return message;
+}
+
 function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -319,7 +327,9 @@ export default function App() {
             setAuthError(null);
           } catch (error) {
             setUser(null);
-            setAuthError(error instanceof Error ? error.message : 'Failed to load user profile');
+            setAuthError(
+              normalizeAuthMessage(error instanceof Error ? error.message : 'Failed to load user profile')
+            );
           } finally {
             setLoading(false);
           }
@@ -330,7 +340,9 @@ export default function App() {
           }
 
           setUser(null);
-          setAuthError(error instanceof Error ? error.message : 'Failed to load user profile');
+          setAuthError(
+            normalizeAuthMessage(error instanceof Error ? error.message : 'Failed to load user profile')
+          );
           setLoading(false);
         }
       );

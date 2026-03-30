@@ -38,6 +38,8 @@ type LegacyStore = {
 
 let pool: Pool | null = null;
 let schemaReadyPromise: Promise<void> | null = null;
+const SCHEMA_LOCK_NAMESPACE = 2147483001;
+const SCHEMA_LOCK_KEY = 2147483002;
 
 function getConnectionString() {
   const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
@@ -108,7 +110,13 @@ export async function ensureSchema() {
 
 async function ensureSchemaInternal() {
   const client = await getPool().connect();
+  let lockHeld = false;
   try {
+    // Multiple serverless instances can cold-start at once. Serialize schema/default
+    // initialization so Postgres catalog updates do not collide.
+    await client.query('SELECT pg_advisory_lock($1, $2)', [SCHEMA_LOCK_NAMESPACE, SCHEMA_LOCK_KEY]);
+    lockHeld = true;
+
     const statements = [
       `
       CREATE TABLE IF NOT EXISTS users (
@@ -410,6 +418,13 @@ async function ensureSchemaInternal() {
     await ensureDefaultSettings(client);
     await ensureUsersHaveDefaultBranch(client);
   } finally {
+    if (lockHeld) {
+      try {
+        await client.query('SELECT pg_advisory_unlock($1, $2)', [SCHEMA_LOCK_NAMESPACE, SCHEMA_LOCK_KEY]);
+      } catch {
+        // Ignore unlock errors; releasing the client also releases session locks.
+      }
+    }
     client.release();
   }
 }
