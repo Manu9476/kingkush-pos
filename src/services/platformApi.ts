@@ -210,6 +210,61 @@ export async function changePassword(input: {
   });
 }
 
+export async function getProductMovementReport(input: {
+  rangeStart: string;
+  rangeEnd: string;
+}) {
+  return requestJson<{
+    range: { start: string; end: string };
+    rows: Array<{
+      movementId: string;
+      movementAt: string;
+      productId: string;
+      productName: string;
+      sku: string;
+      barcode: string;
+      unitType: string;
+      movementType: string;
+      sourceType: string;
+      sourceId: string;
+      quantity: number;
+      quantityIn: number;
+      quantityOut: number;
+      netQuantity: number;
+      resultingStock: number | '';
+      reason: string;
+      reference: string;
+      notes: string;
+      unitCost: number | '';
+      branchName: string;
+      branchCode: string;
+      supplierName: string;
+      movedBy: string;
+      customerName: string;
+      paymentMethod: string;
+      tenderMethod: string;
+    }>;
+    summary: Array<{
+      productId: string;
+      productName: string;
+      sku: string;
+      barcode: string;
+      unitType: string;
+      totalMoves: number;
+      totalIn: number;
+      totalOut: number;
+      netQuantity: number;
+      latestKnownStock: number | '';
+    }>;
+  }>('/api/reports', {
+    method: 'POST',
+    body: JSON.stringify({
+      reportType: 'product-movement',
+      ...input
+    })
+  });
+}
+
 export async function dataApi<T>(body: Record<string, unknown>) {
   return requestJson<T>('/api/data', {
     method: 'POST',
