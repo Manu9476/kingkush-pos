@@ -303,6 +303,21 @@ export default function App() {
         return;
       }
 
+      if (authUser.sessionProfile) {
+        if (authUser.sessionProfile.status !== 'active') {
+          void signOut(auth);
+          setUser(null);
+          setAuthError('Account is inactive. Please contact an administrator.');
+          setLoading(false);
+          return;
+        }
+
+        setUser(authUser.sessionProfile);
+        setBootstrapRequired(false);
+        setAuthError(null);
+        setLoading(false);
+      }
+
       unsubProfile = onSnapshot(
         doc(db, 'users', authUser.uid),
         async (userDoc) => {

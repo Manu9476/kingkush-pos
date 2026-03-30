@@ -1,4 +1,5 @@
 import { dataApi } from './services/platformApi';
+import type { UserProfile } from './types';
 
 type AuthLikeUser = {
   uid: string;
@@ -13,6 +14,7 @@ type AuthLikeUser = {
     email: string | null;
     photoURL: string | null;
   }[];
+  sessionProfile?: UserProfile;
 };
 
 type DocumentData = any;
@@ -207,6 +209,25 @@ export class Timestamp {
 }
 
 function toAuthLikeUser(user: any): AuthLikeUser {
+  const sessionProfile =
+    user &&
+    typeof user === 'object' &&
+    typeof user.uid === 'string' &&
+    typeof user.username === 'string' &&
+    typeof user.role === 'string'
+      ? {
+          uid: user.uid,
+          username: user.username,
+          email: user.email || `${user.username}@kingkush.local`,
+          displayName: user.displayName || user.username,
+          branchId: user.branchId ?? null,
+          role: user.role,
+          permissions: Array.isArray(user.permissions) ? user.permissions : [],
+          status: user.status || 'active',
+          createdAt: user.createdAt || new Date().toISOString()
+        } satisfies UserProfile
+      : undefined;
+
   return {
     uid: user.uid,
     email: user.email || `${user.username}@kingkush.local`,
@@ -221,7 +242,8 @@ function toAuthLikeUser(user: any): AuthLikeUser {
         email: user.email || null,
         photoURL: null
       }
-    ]
+    ],
+    sessionProfile
   };
 }
 
