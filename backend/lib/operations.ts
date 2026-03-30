@@ -37,7 +37,12 @@ export async function resolveBranchId(client: PoolClient, user: Pick<SessionUser
   return settingsResult.rows[0]?.default_branch_id || 'branch_main';
 }
 
-export async function getOpenShift(client: PoolClient, userId: string) {
+export async function getOpenShift(
+  client: PoolClient,
+  userId: string,
+  options: { forUpdate?: boolean } = {}
+) {
+  const lockClause = options.forUpdate === false ? '' : 'FOR UPDATE';
   const shiftResult = await client.query<{
     id: string;
     branch_id: string | null;
@@ -66,7 +71,7 @@ export async function getOpenShift(client: PoolClient, userId: string) {
     WHERE user_id = $1 AND status = 'open'
     ORDER BY opened_at DESC
     LIMIT 1
-    FOR UPDATE
+    ${lockClause}
     `,
     [userId]
   );

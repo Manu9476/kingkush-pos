@@ -1,4 +1,4 @@
-const REQUEST_TIMEOUT_MS = 20000;
+const REQUEST_TIMEOUT_MS = 30000;
 const REQUEST_TIMEOUT_MESSAGE = 'The server took too long to respond. Please retry.';
 const PROTECTED_PREVIEW_MESSAGE =
   'This Vercel preview deployment is protected. Sign into the preview or use the public production URL.';
@@ -63,10 +63,11 @@ async function readResponsePayload(response: Response) {
 async function requestJson<T>(
   url: string,
   options: RequestInit = {},
-  config: { mutatesData?: boolean } = {}
+  config: { mutatesData?: boolean; timeoutMs?: number } = {}
 ) {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutMs = config.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
   if (options.body !== undefined && !headers.has('Content-Type')) {
@@ -146,7 +147,7 @@ export async function createSale(input: {
   }>('/api/transactions/sale', {
     method: 'POST',
     body: JSON.stringify(input)
-  }, { mutatesData: true });
+  }, { mutatesData: true, timeoutMs: 45000 });
 }
 
 export async function refundSale(input: {
@@ -368,5 +369,8 @@ export async function dataApi<T>(body: Record<string, unknown>) {
   return requestJson<T>('/api/data', {
     method: 'POST',
     body: JSON.stringify(body)
-  }, { mutatesData: body.mode === 'write' });
+  }, {
+    mutatesData: body.mode === 'write',
+    timeoutMs: body.mode === 'write' ? 45000 : REQUEST_TIMEOUT_MS
+  });
 }

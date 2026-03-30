@@ -236,7 +236,7 @@ export default async function handler(req: any, res: any) {
       }
 
       const payload = await withTransaction(async (client) => {
-        const shift = await getOpenShift(client, user.uid);
+        const shift = await getOpenShift(client, user.uid, { forUpdate: false });
         if (!shift) {
           return { shift: null, summary: null };
         }

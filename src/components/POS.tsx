@@ -74,6 +74,7 @@ export default function POS() {
   const customerSearchRef = useRef<HTMLDivElement>(null);
   const customerInputRef = useRef<HTMLInputElement>(null);
   const lastDrawerTriggerSaleId = useRef<string | null>(null);
+  const shiftRefreshInFlight = useRef(false);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -105,23 +106,43 @@ export default function POS() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     const refreshShiftStatus = async () => {
+      if (shiftRefreshInFlight.current) {
+        return;
+      }
+
+      shiftRefreshInFlight.current = true;
       try {
         const payload = await getShiftStatus();
-        setCurrentShift(payload.shift);
-        setShiftSummary(payload.summary);
+        if (!cancelled) {
+          setCurrentShift(payload.shift);
+          setShiftSummary(payload.summary);
+        }
       } catch (error) {
         if (process.env.NODE_ENV === 'development') {
           console.error('Error fetching current shift:', error);
         }
-        setCurrentShift(null);
-        setShiftSummary(null);
+      } finally {
+        shiftRefreshInFlight.current = false;
       }
     };
 
     void refreshShiftStatus();
-    const intervalId = window.setInterval(refreshShiftStatus, 10000);
-    return () => window.clearInterval(intervalId);
+    const intervalId = window.setInterval(() => {
+      void refreshShiftStatus();
+    }, 20000);
+    const handleWindowFocus = () => {
+      void refreshShiftStatus();
+    };
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
   }, []);
 
   useEffect(() => {

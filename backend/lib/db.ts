@@ -40,6 +40,7 @@ let pool: Pool | null = null;
 let schemaReadyPromise: Promise<void> | null = null;
 const SCHEMA_LOCK_NAMESPACE = 2147483001;
 const SCHEMA_LOCK_KEY = 2147483002;
+const SCHEMA_READY_MARKER = 'schema_bootstrap_v1';
 
 function getConnectionString() {
   const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
@@ -112,10 +113,18 @@ async function ensureSchemaInternal() {
   const client = await getPool().connect();
   let lockHeld = false;
   try {
+    if (await hasSchemaReadyMarker(client)) {
+      return;
+    }
+
     // Multiple serverless instances can cold-start at once. Serialize schema/default
     // initialization so Postgres catalog updates do not collide.
     await client.query('SELECT pg_advisory_lock($1, $2)', [SCHEMA_LOCK_NAMESPACE, SCHEMA_LOCK_KEY]);
     lockHeld = true;
+
+    if (await hasSchemaReadyMarker(client)) {
+      return;
+    }
 
     const statements = [
       `
@@ -417,6 +426,7 @@ async function ensureSchemaInternal() {
     await maybeMigrateLegacyStore(client);
     await ensureDefaultSettings(client);
     await ensureUsersHaveDefaultBranch(client);
+    await markSchemaReady(client);
   } finally {
     if (lockHeld) {
       try {
@@ -427,6 +437,37 @@ async function ensureSchemaInternal() {
     }
     client.release();
   }
+}
+
+async function hasSchemaReadyMarker(client: PoolClient) {
+  const catalogResult = await client.query<{
+    users_table: string | null;
+    migrations_table: string | null;
+  }>(
+    `
+    SELECT
+      to_regclass('public.users')::text AS users_table,
+      to_regclass('public.data_migrations')::text AS migrations_table
+    `
+  );
+
+  if (!catalogResult.rows[0]?.users_table || !catalogResult.rows[0]?.migrations_table) {
+    return false;
+  }
+
+  const markerResult = await client.query<{ exists: boolean }>(
+    'SELECT EXISTS (SELECT 1 FROM data_migrations WHERE migration_key = $1) AS exists',
+    [SCHEMA_READY_MARKER]
+  );
+
+  return Boolean(markerResult.rows[0]?.exists);
+}
+
+async function markSchemaReady(client: PoolClient) {
+  await client.query(
+    'INSERT INTO data_migrations (migration_key) VALUES ($1) ON CONFLICT DO NOTHING',
+    [SCHEMA_READY_MARKER]
+  );
 }
 
 async function ensureDefaultBranch(client: PoolClient) {
