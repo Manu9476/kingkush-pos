@@ -576,7 +576,7 @@ export default function Labels() {
 
       {/* Batch Table */}
       <div className="bg-white rounded-4xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
+        <div className="desktop-table-scroll overflow-x-auto pr-2 custom-scrollbar">
           <table className="w-full text-left">
             <thead className="sticky top-0 z-10 shadow-sm bg-gray-50/50 border-b border-gray-100">
               <tr className="text-[10px] uppercase font-black text-gray-600 tracking-widest">

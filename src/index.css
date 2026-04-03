@@ -90,6 +90,12 @@
 @layer components {
   @media (min-width: 1024px) {
     .app-shell {
+      --desktop-scroll-visible-rows: 5;
+      --desktop-list-row-height: 4.5rem;
+      --desktop-table-row-height: 4.75rem;
+      --desktop-table-header-height: 3.5rem;
+      --desktop-list-scroll-height: calc(var(--desktop-list-row-height) * var(--desktop-scroll-visible-rows));
+      --desktop-table-scroll-height: calc(var(--desktop-table-header-height) + (var(--desktop-table-row-height) * var(--desktop-scroll-visible-rows)));
       height: 100vh;
       min-height: 100vh;
       overflow: hidden;
@@ -151,7 +157,7 @@
     .app-shell .desktop-table-scroll {
       flex: 0 0 auto;
       min-height: auto;
-      max-height: none !important;
+      scrollbar-gutter: stable;
     }
 
     .app-shell .desktop-scroll {
@@ -163,8 +169,14 @@
       overflow: visible !important;
     }
 
+    .app-shell .desktop-list-scroll {
+      max-height: var(--desktop-list-scroll-height) !important;
+      overflow-y: auto !important;
+    }
+
     .app-shell .desktop-table-scroll {
-      overflow-y: visible !important;
+      max-height: var(--desktop-table-scroll-height) !important;
+      overflow-y: auto !important;
     }
   }
 

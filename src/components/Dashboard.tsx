@@ -353,7 +353,7 @@ export default function Dashboard() {
         {/* Recent Sales */}
         <div className="bg-white p-6 rounded-4xl shadow-sm border border-gray-100">
           <h3 className="text-xl font-bold text-gray-900 mb-4">Recent Transactions</h3>
-          <div className="space-y-3 max-h-75 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="desktop-list-scroll space-y-3 pr-2 custom-scrollbar">
             {recentSales.map(sale => (
               <div key={sale.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-2xl transition-colors">
                 <div className="flex items-center gap-3">
@@ -403,7 +403,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="overflow-x-auto max-h-100 overflow-y-auto pr-2 custom-scrollbar border border-gray-50 rounded-2xl shadow-inner bg-gray-50/30">
+        <div className="desktop-table-scroll overflow-x-auto pr-2 custom-scrollbar border border-gray-50 rounded-2xl shadow-inner bg-gray-50/30">
           <table className="w-full">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="text-left border-b border-gray-100">

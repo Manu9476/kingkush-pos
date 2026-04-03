@@ -522,7 +522,7 @@ export default function CashShifts() {
                 </button>
               </form>
 
-              <div className="border-t border-gray-50 px-8 py-6 space-y-3 max-h-[340px] overflow-y-auto">
+              <div className="desktop-list-scroll border-t border-gray-50 px-8 py-6 space-y-3">
                 {movements.length === 0 ? (
                   <p className="text-sm text-gray-400">No cash movements recorded on this shift yet.</p>
                 ) : (
@@ -751,7 +751,7 @@ export default function CashShifts() {
                 <div className="border-b border-gray-100 px-5 py-4">
                   <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-gray-500">Cash Movements</h3>
                 </div>
-                <div className="max-h-[260px] space-y-3 overflow-y-auto px-5 py-4">
+                <div className="desktop-list-scroll space-y-3 px-5 py-4">
                   {selectedReport.movements.length === 0 ? (
                     <p className="text-sm text-gray-400">No cash movements recorded for this shift.</p>
                   ) : (
@@ -774,7 +774,7 @@ export default function CashShifts() {
                 <div className="border-b border-gray-100 px-5 py-4">
                   <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-gray-500">Shift Sales & Credit Activity</h3>
                 </div>
-                <div className="max-h-[260px] space-y-3 overflow-y-auto px-5 py-4">
+                <div className="desktop-list-scroll space-y-3 px-5 py-4">
                   {selectedReport.sales.length === 0 && selectedReport.creditPayments.length === 0 ? (
                     <p className="text-sm text-gray-400">No sale or credit activity recorded for this shift.</p>
                   ) : (

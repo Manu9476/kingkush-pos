@@ -903,7 +903,7 @@ export default function Reports() {
               <Download className="w-5 h-5" />
             </button>
           </div>
-          <div className="space-y-4 max-h-75 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="desktop-list-scroll space-y-4 pr-2 custom-scrollbar">
             {lowStockProducts.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-sm text-gray-400 font-medium">All stock levels are healthy</p>
