@@ -41,6 +41,45 @@ let schemaReadyPromise: Promise<void> | null = null;
 const SCHEMA_LOCK_NAMESPACE = 2147483001;
 const SCHEMA_LOCK_KEY = 2147483002;
 const SCHEMA_READY_MARKER = 'schema_bootstrap_v1';
+const SCHEMA_REQUIRED_COLUMNS = [
+  { table: 'users', column: 'branch_id' },
+  { table: 'system_settings', column: 'business_name' },
+  { table: 'system_settings', column: 'store_address' },
+  { table: 'system_settings', column: 'store_phone' },
+  { table: 'system_settings', column: 'store_email' },
+  { table: 'system_settings', column: 'receipt_header' },
+  { table: 'system_settings', column: 'receipt_footer' },
+  { table: 'system_settings', column: 'receipt_auto_print' },
+  { table: 'system_settings', column: 'receipt_paper_width_mm' },
+  { table: 'system_settings', column: 'receipt_font_size_px' },
+  { table: 'system_settings', column: 'receipt_brand_color' },
+  { table: 'system_settings', column: 'receipt_sale_title' },
+  { table: 'system_settings', column: 'receipt_refund_title' },
+  { table: 'system_settings', column: 'receipt_credit_title' },
+  { table: 'system_settings', column: 'receipt_expense_title' },
+  { table: 'system_settings', column: 'receipt_shift_title' },
+  { table: 'system_settings', column: 'receipt_show_branch_name' },
+  { table: 'system_settings', column: 'receipt_show_address' },
+  { table: 'system_settings', column: 'receipt_show_phone' },
+  { table: 'system_settings', column: 'receipt_show_email' },
+  { table: 'system_settings', column: 'receipt_show_header' },
+  { table: 'system_settings', column: 'receipt_show_footer' },
+  { table: 'system_settings', column: 'receipt_show_cashier' },
+  { table: 'system_settings', column: 'receipt_show_customer' },
+  { table: 'system_settings', column: 'receipt_show_reference' },
+  { table: 'system_settings', column: 'receipt_show_tax_line' },
+  { table: 'system_settings', column: 'receipt_show_loyalty_summary' },
+  { table: 'system_settings', column: 'barcode_autofocus' },
+  { table: 'system_settings', column: 'barcode_submit_delay_ms' },
+  { table: 'system_settings', column: 'default_branch_id' },
+  { table: 'sales', column: 'branch_id' },
+  { table: 'sales', column: 'shift_id' },
+  { table: 'sales', column: 'tender_method' },
+  { table: 'credit_payments', column: 'branch_id' },
+  { table: 'credit_payments', column: 'shift_id' },
+  { table: 'inventory_ledger', column: 'branch_id' },
+  { table: 'audit_logs', column: 'branch_id' }
+] as const;
 
 function getConnectionString() {
   const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
@@ -479,13 +518,38 @@ async function hasSchemaReadyMarker(client: PoolClient) {
     [SCHEMA_READY_MARKER]
   );
 
-  return Boolean(markerResult.rows[0]?.exists);
+  if (!Boolean(markerResult.rows[0]?.exists)) {
+    return false;
+  }
+
+  return hasRequiredSchemaColumns(client);
 }
 
 async function markSchemaReady(client: PoolClient) {
   await client.query(
     'INSERT INTO data_migrations (migration_key) VALUES ($1) ON CONFLICT DO NOTHING',
     [SCHEMA_READY_MARKER]
+  );
+}
+
+async function hasRequiredSchemaColumns(client: PoolClient) {
+  const requiredTables = [...new Set(SCHEMA_REQUIRED_COLUMNS.map((entry) => entry.table))];
+  const columnRows = await client.query<{ table_name: string; column_name: string }>(
+    `
+    SELECT table_name, column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = ANY($1::text[])
+    `,
+    [requiredTables]
+  );
+
+  const availableColumns = new Set(
+    columnRows.rows.map((row) => `${row.table_name}.${row.column_name}`)
+  );
+
+  return SCHEMA_REQUIRED_COLUMNS.every((entry) =>
+    availableColumns.has(`${entry.table}.${entry.column}`)
   );
 }
 
