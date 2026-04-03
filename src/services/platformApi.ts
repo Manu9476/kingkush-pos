@@ -32,6 +32,24 @@ export type SystemHistoryScope = {
   recordCount: number;
 };
 
+export type SystemReceiptKind = 'sale' | 'refund' | 'credit-payment' | 'expense' | 'cash-shift';
+
+export type SystemReceiptSearchResult = {
+  id: string;
+  kind: SystemReceiptKind;
+  label: string;
+  receiptNumber: string;
+  issuedAt: string;
+  branchName: string | null;
+  actorName: string;
+  subjectName: string | null;
+  reference: string | null;
+  amount: number;
+  status: string;
+  summary: string;
+  warning: string;
+};
+
 export type SystemStatusReport = {
   generatedAt: string;
   services: Array<{
@@ -51,6 +69,17 @@ export type SystemStatusReport = {
     header: string;
     footer: string;
   };
+};
+
+export type SystemReceiptSearchResponse = {
+  filters: {
+    kind: 'all' | SystemReceiptKind;
+    query: string;
+    dateFrom: string | null;
+    dateTo: string | null;
+    limit: number;
+  };
+  receipts: SystemReceiptSearchResult[];
 };
 
 function emitDataMutation(url: string, method: string) {
@@ -375,6 +404,56 @@ export async function purgeSystemHistory(input: {
   }>('/api/admin/system', {
     method: 'POST',
     body: JSON.stringify(input)
+  }, { mutatesData: true, timeoutMs: 45000 });
+}
+
+export async function searchSystemReceipts(input: {
+  kind?: 'all' | SystemReceiptKind;
+  query?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+}) {
+  const params = new URLSearchParams();
+  params.set('view', 'receipts');
+  if (input.kind) {
+    params.set('kind', input.kind);
+  }
+  if (input.query) {
+    params.set('query', input.query);
+  }
+  if (input.dateFrom) {
+    params.set('dateFrom', input.dateFrom);
+  }
+  if (input.dateTo) {
+    params.set('dateTo', input.dateTo);
+  }
+  if (input.limit) {
+    params.set('limit', String(input.limit));
+  }
+
+  return requestJson<SystemReceiptSearchResponse>(`/api/admin/system?${params.toString()}`, {
+    method: 'GET',
+    headers: {}
+  });
+}
+
+export async function deleteSystemReceipt(input: {
+  kind: SystemReceiptKind;
+  id: string;
+}) {
+  return requestJson<{
+    ok: true;
+    kind: SystemReceiptKind;
+    id: string;
+    deleted: Record<string, number>;
+    message: string;
+  }>('/api/admin/system', {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'delete-receipt',
+      ...input
+    })
   }, { mutatesData: true, timeoutMs: 45000 });
 }
 

@@ -25,14 +25,24 @@ import {
   Printer,
   ScanLine,
   Palette,
-  Trash2
+  Trash2,
+  Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import ConfirmDialog from './ConfirmDialog';
 import { recordAuditLog } from '../services/auditService';
 import { testCashDrawer } from '../services/cashDrawer';
-import { changePassword, getSystemStatusReport, purgeSystemHistory, type SystemStatusReport } from '../services/platformApi';
+import {
+  changePassword,
+  deleteSystemReceipt,
+  getSystemStatusReport,
+  purgeSystemHistory,
+  searchSystemReceipts,
+  type SystemReceiptKind,
+  type SystemReceiptSearchResult,
+  type SystemStatusReport
+} from '../services/platformApi';
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -41,6 +51,11 @@ function clamp(value: number, min: number, max: number) {
 function normalizeColor(value: string, fallback: string) {
   const trimmed = value.trim();
   return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(trimmed) ? trimmed : fallback;
+}
+
+function formatDateTimeLocal(date: Date) {
+  const pad = (value: number) => value.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -104,6 +119,13 @@ export default function Settings() {
   const [systemReport, setSystemReport] = useState<SystemStatusReport | null>(null);
   const [isLoadingSystemReport, setIsLoadingSystemReport] = useState(false);
   const [purgingScopeId, setPurgingScopeId] = useState<string | null>(null);
+  const [receiptKind, setReceiptKind] = useState<'all' | SystemReceiptKind>('all');
+  const [receiptQuery, setReceiptQuery] = useState('');
+  const [receiptDateFrom, setReceiptDateFrom] = useState(() => formatDateTimeLocal(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)));
+  const [receiptDateTo, setReceiptDateTo] = useState(() => formatDateTimeLocal(new Date()));
+  const [receiptResults, setReceiptResults] = useState<SystemReceiptSearchResult[]>([]);
+  const [isSearchingReceipts, setIsSearchingReceipts] = useState(false);
+  const [deletingReceiptKey, setDeletingReceiptKey] = useState<string | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -130,6 +152,71 @@ export default function Settings() {
     } finally {
       setIsLoadingSystemReport(false);
     }
+  };
+
+  const loadReceiptResults = async () => {
+    const fromDate = receiptDateFrom ? new Date(receiptDateFrom) : null;
+    const toDate = receiptDateTo ? new Date(receiptDateTo) : null;
+
+    if (!fromDate || Number.isNaN(fromDate.getTime()) || !toDate || Number.isNaN(toDate.getTime())) {
+      toast.error('Choose a valid start and end date/time first.');
+      return;
+    }
+
+    if (fromDate.getTime() > toDate.getTime()) {
+      toast.error('Receipt search start time must be before the end time.');
+      return;
+    }
+
+    setIsSearchingReceipts(true);
+    try {
+      const response = await searchSystemReceipts({
+        kind: receiptKind,
+        query: receiptQuery.trim(),
+        dateFrom: fromDate.toISOString(),
+        dateTo: toDate.toISOString(),
+        limit: 60
+      });
+      setReceiptResults(response.receipts);
+    } catch (error: any) {
+      toast.error(error.message || 'Unable to search receipts');
+    } finally {
+      setIsSearchingReceipts(false);
+    }
+  };
+
+  const requestSingleReceiptDelete = (receipt: SystemReceiptSearchResult) => {
+    const receiptLabel = `${receipt.label} ${receipt.receiptNumber}`;
+    setConfirmConfig({
+      isOpen: true,
+      title: `Delete ${receiptLabel}`,
+      message: `${receipt.warning} Receipt time: ${new Date(receipt.issuedAt).toLocaleString()}. This action is irreversible.`,
+      confirmLabel: 'Delete Receipt',
+      type: 'danger',
+      onConfirm: async () => {
+        setDeletingReceiptKey(`${receipt.kind}:${receipt.id}`);
+        try {
+          const result = await deleteSystemReceipt({
+            kind: receipt.kind,
+            id: receipt.id
+          });
+          const deletedSummary = Object.entries(result.deleted)
+            .filter(([, count]) => count > 0)
+            .map(([key, count]) => `${key}: ${count}`)
+            .join(', ');
+
+          toast.success(result.message);
+          if (deletedSummary) {
+            toast.info(`Deleted ${deletedSummary}`);
+          }
+          await Promise.all([refreshSystemReport(), loadReceiptResults()]);
+        } catch (error: any) {
+          toast.error(error.message || 'Failed to delete the selected receipt');
+        } finally {
+          setDeletingReceiptKey(null);
+        }
+      }
+    });
   };
 
   useEffect(() => {
@@ -920,6 +1007,138 @@ export default function Settings() {
                 </div>
               </div>
             ))}
+
+            <div className="rounded-2xl border border-red-200 bg-white px-5 py-5 space-y-5">
+              <div className="flex items-start gap-3">
+                <div className="mt-1 rounded-2xl bg-red-50 p-2 text-red-600">
+                  <Search className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Delete One Receipt by Date & Time</h3>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Search a specific sale, refund, credit payment, expense voucher, or closed cash shift report, then delete only that one receipt.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+                <LabeledField label="Receipt Type">
+                  <select
+                    value={receiptKind}
+                    onChange={(event) => setReceiptKind(event.target.value as 'all' | SystemReceiptKind)}
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="all">All receipt types</option>
+                    <option value="sale">Sale receipts</option>
+                    <option value="refund">Refund receipts</option>
+                    <option value="credit-payment">Credit payment receipts</option>
+                    <option value="expense">Expense vouchers</option>
+                    <option value="cash-shift">Cash shift reports</option>
+                  </select>
+                </LabeledField>
+
+                <LabeledField label="From">
+                  <input
+                    type="datetime-local"
+                    value={receiptDateFrom}
+                    onChange={(event) => setReceiptDateFrom(event.target.value)}
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:ring-2 focus:ring-indigo-500"
+                  />
+                </LabeledField>
+
+                <LabeledField label="To">
+                  <input
+                    type="datetime-local"
+                    value={receiptDateTo}
+                    onChange={(event) => setReceiptDateTo(event.target.value)}
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:ring-2 focus:ring-indigo-500"
+                  />
+                </LabeledField>
+
+                <LabeledField label="Search Term">
+                  <input
+                    type="text"
+                    value={receiptQuery}
+                    onChange={(event) => setReceiptQuery(event.target.value)}
+                    placeholder="Receipt no, customer, cashier, ref..."
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:ring-2 focus:ring-indigo-500"
+                  />
+                </LabeledField>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => void loadReceiptResults()}
+                  disabled={isSearchingReceipts}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Search className="h-4 w-4" />
+                  {isSearchingReceipts ? 'Searching...' : 'Search Receipts'}
+                </button>
+                <p className="text-xs text-amber-700">
+                  Use the time window first, then narrow down with a receipt number, customer name, cashier name, branch or reference.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-gray-200 bg-gray-50">
+                {isSearchingReceipts ? (
+                  <div className="flex items-center gap-3 px-5 py-6 text-sm text-gray-500">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+                    Searching matching receipts...
+                  </div>
+                ) : receiptResults.length === 0 ? (
+                  <div className="px-5 py-8 text-center text-sm text-gray-500">
+                    No matching receipts loaded yet. Set the time window you want, then click <span className="font-semibold text-gray-700">Search Receipts</span>.
+                  </div>
+                ) : (
+                  <div className="max-h-96 overflow-y-auto px-3 py-3 custom-scrollbar space-y-3">
+                    {receiptResults.map((receipt) => (
+                      <div key={`${receipt.kind}:${receipt.id}`} className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+                                {receipt.label}
+                              </span>
+                              <span className="rounded-full bg-gray-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                {receipt.receiptNumber}
+                              </span>
+                              <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500 border border-gray-200">
+                                {new Date(receipt.issuedAt).toLocaleString()}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-2 text-sm text-gray-600 md:grid-cols-2">
+                              <p><span className="font-bold text-gray-900">Actor:</span> {receipt.actorName}</p>
+                              <p><span className="font-bold text-gray-900">Subject:</span> {receipt.subjectName || 'N/A'}</p>
+                              <p><span className="font-bold text-gray-900">Branch:</span> {receipt.branchName || 'No branch'}</p>
+                              <p><span className="font-bold text-gray-900">Status:</span> {receipt.status}</p>
+                              <p><span className="font-bold text-gray-900">Amount:</span> KES {receipt.amount.toLocaleString()}</p>
+                              <p><span className="font-bold text-gray-900">Reference:</span> {receipt.reference || 'No reference'}</p>
+                            </div>
+
+                            <div className="rounded-2xl bg-red-50 px-4 py-3">
+                              <p className="text-xs font-semibold text-gray-700">{receipt.summary || 'No extra summary available.'}</p>
+                              <p className="mt-1 text-xs text-red-700">{receipt.warning}</p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => requestSingleReceiptDelete(receipt)}
+                            disabled={Boolean(purgingScopeId) || deletingReceiptKey === `${receipt.kind}:${receipt.id}`}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {deletingReceiptKey === `${receipt.kind}:${receipt.id}` ? 'Deleting...' : 'Delete This Receipt'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className="rounded-2xl border border-red-200 bg-white px-5 py-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
