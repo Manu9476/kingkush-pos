@@ -86,3 +86,89 @@
     cursor: not-allowed;
   }
 }
+
+@layer components {
+  .app-shell .max-w-7xl,
+  .app-shell .max-w-6xl,
+  .app-shell .max-w-5xl {
+    max-width: 100% !important;
+  }
+
+  .app-shell .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1.25rem !important;
+  }
+
+  .app-shell .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem !important;
+  }
+
+  .app-shell .gap-8 {
+    gap: 1.25rem !important;
+  }
+
+  .app-shell .gap-6 {
+    gap: 1rem !important;
+  }
+
+  .app-shell .p-8 {
+    padding: 1.25rem !important;
+  }
+
+  .app-shell .p-6 {
+    padding: 1rem !important;
+  }
+
+  .app-shell .px-8 {
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+  }
+
+  .app-shell .px-6 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .app-shell .py-6 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .app-shell .py-4 {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  .app-shell .py-3\.5 {
+    padding-top: 0.65rem !important;
+    padding-bottom: 0.65rem !important;
+  }
+
+  .app-shell .text-3xl {
+    font-size: 1.75rem !important;
+    line-height: 2rem !important;
+  }
+
+  .app-shell .text-2xl {
+    font-size: 1.375rem !important;
+    line-height: 1.75rem !important;
+  }
+
+  .app-shell .text-xl {
+    font-size: 1.125rem !important;
+    line-height: 1.5rem !important;
+  }
+
+  .app-shell .rounded-4xl {
+    border-radius: 1.5rem !important;
+  }
+
+  .app-shell .rounded-3xl {
+    border-radius: 1.25rem !important;
+  }
+
+  .app-shell table th,
+  .app-shell table td {
+    padding-top: 0.85rem !important;
+    padding-bottom: 0.85rem !important;
+  }
+}

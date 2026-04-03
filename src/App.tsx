@@ -192,15 +192,15 @@ function Layout({ children }: { children: React.ReactNode }) {
   const filteredNav = APP_MODULES.filter((item) => userHasAnyPermission(user, item.permissions));
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    <div className="app-shell min-h-screen bg-gray-50 flex flex-col md:flex-row">
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-indigo-900 text-white transform transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-50 w-56 bg-indigo-900 text-white transform transition-transform duration-300 ease-in-out
         md:sticky md:top-0 md:h-screen md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="h-full flex flex-col">
-          <div className="p-8 shrink-0">
-            <h1 className="text-2xl font-black text-white tracking-tight">KingKush Sale</h1>
+          <div className="p-6 shrink-0">
+            <h1 className="text-xl font-black text-white tracking-tight">KingKush Sale</h1>
             <div className="mt-2">
               <p className="text-[10px] font-bold text-indigo-100 uppercase tracking-wider leading-tight">
                 {user?.role === 'superadmin' ? 'System Super Admin' : 'Staff Portal'}
@@ -209,32 +209,32 @@ function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
+          <nav className="flex-1 px-3 space-y-1 overflow-y-auto custom-scrollbar">
             {filteredNav.map(item => (
               <Link
                 key={item.path}
                 to={item.path}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`
-                  flex items-center gap-4 px-6 py-3.5 rounded-2xl transition-all
+                  flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all
                   ${location.pathname === item.path 
                     ? 'bg-indigo-800 text-white font-bold shadow-lg shadow-indigo-950/20' 
                     : 'text-indigo-200 hover:bg-indigo-800/50 hover:text-white font-medium'}
                 `}
               >
-                <item.icon className="w-5 h-5" />
-                <span className="text-sm">{item.label}</span>
+                <item.icon className="w-4 h-4" />
+                <span className="text-[13px]">{item.label}</span>
               </Link>
             ))}
           </nav>
 
-          <div className="p-8 shrink-0 border-t border-indigo-800/50">
+          <div className="p-6 shrink-0 border-t border-indigo-800/50">
             <button 
               onClick={() => logout()}
-              className="w-full flex items-center gap-4 px-6 py-3.5 text-indigo-200 hover:bg-red-500/10 hover:text-red-400 rounded-2xl font-medium transition-all"
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-indigo-200 hover:bg-red-500/10 hover:text-red-400 rounded-xl font-medium transition-all"
             >
-              <LogOut className="w-5 h-5" />
-              <span className="text-sm">Logout</span>
+              <LogOut className="w-4 h-4" />
+              <span className="text-[13px]">Logout</span>
             </button>
           </div>
         </div>
@@ -242,9 +242,9 @@ function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="sticky top-0 z-40 h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 md:px-12">
+        <header className="sticky top-0 z-40 h-16 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 md:px-8">
           <div className="flex items-center gap-3">
-            <span className="font-black text-indigo-900 text-xl md:hidden">KingKush Sale</span>
+            <span className="font-black text-indigo-900 text-lg md:hidden">KingKush Sale</span>
             <div className="hidden md:block">
               <p className="text-sm font-bold text-gray-900">Welcome back, {user?.displayName || user?.username}</p>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{user?.role}</p>
@@ -253,7 +253,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-4">
             <button 
               onClick={() => logout()}
-              className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl font-bold transition-all text-sm border border-red-100"
+              className="flex items-center gap-2 px-3.5 py-2 text-red-600 hover:bg-red-50 rounded-xl font-bold transition-all text-sm border border-red-100"
             >
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Logout</span>
@@ -264,7 +264,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-12 lg:p-16">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           {children}
         </div>
       </main>
