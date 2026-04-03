@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   db, 
   collection, 
@@ -24,6 +24,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../App';
 import { processInventoryMovement } from '../services/platformApi';
+import { toast } from 'sonner';
+import {
+  isScannerSubmitKey,
+  normalizeBarcodeLookup,
+  sanitizeBarcodeFieldValue
+} from '../utils/barcode';
 
 export default function Inventory() {
   const { user } = useAuth();
@@ -64,6 +70,12 @@ export default function Inventory() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const receivingBarcodeRef = useRef<HTMLInputElement>(null);
+  const stockInBarcodeRef = useRef<HTMLInputElement>(null);
+  const adjustmentBarcodeRef = useRef<HTMLInputElement>(null);
+  const receivingQuantityRef = useRef<HTMLInputElement>(null);
+  const stockInQuantityRef = useRef<HTMLInputElement>(null);
+  const adjustmentQuantityRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -87,13 +99,100 @@ export default function Inventory() {
     };
   }, [user]);
 
-  const handleBarcodeScan = async (barcode: string, actionType: 'receiving' | 'stock-in' | 'adjustment') => {
-    const product = products.find(p => p.barcode === barcode || p.sku.toUpperCase() === barcode.toUpperCase());
+  useEffect(() => {
+    if (!isScannerOn) {
+      return;
+    }
+
+    const activeRef =
+      activeAction === 'receiving'
+        ? receivingBarcodeRef
+        : activeAction === 'stock-in'
+          ? stockInBarcodeRef
+          : adjustmentBarcodeRef;
+
+    const focusId = window.setTimeout(() => {
+      activeRef.current?.focus();
+      activeRef.current?.select();
+    }, 0);
+
+    return () => window.clearTimeout(focusId);
+  }, [activeAction, isScannerOn]);
+
+  const focusInventoryQuantity = (actionType: 'receiving' | 'stock-in' | 'adjustment') => {
+    const quantityRef =
+      actionType === 'receiving'
+        ? receivingQuantityRef
+        : actionType === 'stock-in'
+          ? stockInQuantityRef
+          : adjustmentQuantityRef;
+
+    window.setTimeout(() => quantityRef.current?.focus(), 0);
+  };
+
+  const handleBarcodeScan = (barcode: string, actionType: 'receiving' | 'stock-in' | 'adjustment', notifyIfMissing = false) => {
+    const sanitizedBarcode = sanitizeBarcodeFieldValue(barcode);
+    const barcodeLookup = normalizeBarcodeLookup(sanitizedBarcode);
+
+    if (!barcodeLookup) {
+      return false;
+    }
+
+    const product = products.find(
+      (item) =>
+        normalizeBarcodeLookup(item.barcode) === barcodeLookup ||
+        normalizeBarcodeLookup(item.sku) === barcodeLookup
+    );
+
     if (product) {
       if (actionType === 'receiving') setReceiving(prev => ({ ...prev, productId: product.id, barcode: product.barcode }));
       if (actionType === 'stock-in') setStockIn(prev => ({ ...prev, productId: product.id, barcode: product.barcode }));
       if (actionType === 'adjustment') setAdjustment(prev => ({ ...prev, productId: product.id, barcode: product.barcode }));
+      focusInventoryQuantity(actionType);
+      return true;
     }
+
+    if (actionType === 'receiving') setReceiving(prev => ({ ...prev, productId: '', barcode: sanitizedBarcode }));
+    if (actionType === 'stock-in') setStockIn(prev => ({ ...prev, productId: '', barcode: sanitizedBarcode }));
+    if (actionType === 'adjustment') setAdjustment(prev => ({ ...prev, productId: '', barcode: sanitizedBarcode }));
+
+    if (notifyIfMissing) toast.error('Product not found for the scanned barcode or SKU.');
+
+    return false;
+  };
+
+  const handleInventoryBarcodeChange = (actionType: 'receiving' | 'stock-in' | 'adjustment', value: string) => {
+    const sanitizedBarcode = sanitizeBarcodeFieldValue(value);
+
+    if (actionType === 'receiving') setReceiving(prev => ({ ...prev, barcode: sanitizedBarcode }));
+    if (actionType === 'stock-in') setStockIn(prev => ({ ...prev, barcode: sanitizedBarcode }));
+    if (actionType === 'adjustment') setAdjustment(prev => ({ ...prev, barcode: sanitizedBarcode }));
+
+    if (sanitizedBarcode) {
+      handleBarcodeScan(sanitizedBarcode, actionType);
+      return;
+    }
+
+    if (actionType === 'receiving') setReceiving(prev => ({ ...prev, productId: '' }));
+    if (actionType === 'stock-in') setStockIn(prev => ({ ...prev, productId: '' }));
+    if (actionType === 'adjustment') setAdjustment(prev => ({ ...prev, productId: '' }));
+  };
+
+  const handleInventoryBarcodeKeyDown = (
+    actionType: 'receiving' | 'stock-in' | 'adjustment',
+    event: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (!isScannerSubmitKey(event.key)) {
+      return;
+    }
+
+    const scannedValue = sanitizeBarcodeFieldValue(event.currentTarget.value);
+    if (!scannedValue) {
+      return;
+    }
+
+    event.preventDefault();
+    handleBarcodeScan(scannedValue, actionType, true);
   };
 
   const handleReceiveStock = async () => {
@@ -236,13 +335,13 @@ export default function Inventory() {
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Or Product Barcode</label>
                     <input 
+                      ref={receivingBarcodeRef}
                       type="text" 
                       placeholder="Scan existing product barcode"
                       value={receiving.barcode}
-                      onChange={e => {
-                        setReceiving(prev => ({ ...prev, barcode: e.target.value }));
-                        handleBarcodeScan(e.target.value, 'receiving');
-                      }}
+                      onChange={e => handleInventoryBarcodeChange('receiving', e.target.value)}
+                      onKeyDown={e => handleInventoryBarcodeKeyDown('receiving', e)}
+                      autoComplete="off"
                       className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600"
                     />
                   </div>
@@ -261,6 +360,7 @@ export default function Inventory() {
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Quantity</label>
                       <input 
+                        ref={receivingQuantityRef}
                         type="number" 
                         value={receiving.quantity || ''}
                         onChange={e => setReceiving(prev => ({ ...prev, quantity: Number(e.target.value) }))}
@@ -324,22 +424,23 @@ export default function Inventory() {
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Or Product Barcode</label>
                     <input 
+                      ref={stockInBarcodeRef}
                       type="text" 
                       placeholder="Scan existing product barcode"
                       value={stockIn.barcode}
-                      onChange={e => {
-                        setStockIn(prev => ({ ...prev, barcode: e.target.value }));
-                        handleBarcodeScan(e.target.value, 'stock-in');
-                      }}
+                      onChange={e => handleInventoryBarcodeChange('stock-in', e.target.value)}
+                      onKeyDown={e => handleInventoryBarcodeKeyDown('stock-in', e)}
+                      autoComplete="off"
                       className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Quantity</label>
-                    <input 
-                      type="number" 
-                      value={stockIn.quantity || ''}
-                      onChange={e => setStockIn(prev => ({ ...prev, quantity: Number(e.target.value) }))}
+                      <input 
+                        ref={stockInQuantityRef}
+                        type="number" 
+                        value={stockIn.quantity || ''}
+                        onChange={e => setStockIn(prev => ({ ...prev, quantity: Number(e.target.value) }))}
                       className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600"
                     />
                   </div>
@@ -382,22 +483,23 @@ export default function Inventory() {
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Or Product Barcode</label>
                     <input 
+                      ref={adjustmentBarcodeRef}
                       type="text" 
                       placeholder="Scan existing product barcode"
                       value={adjustment.barcode}
-                      onChange={e => {
-                        setAdjustment(prev => ({ ...prev, barcode: e.target.value }));
-                        handleBarcodeScan(e.target.value, 'adjustment');
-                      }}
+                      onChange={e => handleInventoryBarcodeChange('adjustment', e.target.value)}
+                      onKeyDown={e => handleInventoryBarcodeKeyDown('adjustment', e)}
+                      autoComplete="off"
                       className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Change (+ or -)</label>
-                    <input 
-                      type="number" 
-                      value={adjustment.quantity || ''}
-                      onChange={e => setAdjustment(prev => ({ ...prev, quantity: Number(e.target.value) }))}
+                      <input 
+                        ref={adjustmentQuantityRef}
+                        type="number" 
+                        value={adjustment.quantity || ''}
+                        onChange={e => setAdjustment(prev => ({ ...prev, quantity: Number(e.target.value) }))}
                       className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600"
                     />
                   </div>

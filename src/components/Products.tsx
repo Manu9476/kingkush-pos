@@ -21,6 +21,11 @@ import JsBarcode from 'jsbarcode';
 import { recordAuditLog } from '../services/auditService';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
+import {
+  isScannerSubmitKey,
+  normalizeBarcodeLookup,
+  sanitizeBarcodeFieldValue
+} from '../utils/barcode';
 
 type ProductFormState = {
   name: string;
@@ -204,7 +209,7 @@ export default function Products() {
 
     const normalizedName = formData.name.trim();
     const normalizedSku = formData.sku.trim().toUpperCase();
-    const normalizedBarcode = formData.barcode.trim();
+    const normalizedBarcode = sanitizeBarcodeFieldValue(formData.barcode);
 
     if (!normalizedName || !normalizedSku || !normalizedBarcode) {
       toast.error('Name, SKU, and barcode are required.');
@@ -215,7 +220,7 @@ export default function Products() {
       product.id !== editingProduct?.id &&
       (
         product.sku.trim().toUpperCase() === normalizedSku ||
-        product.barcode.trim() === normalizedBarcode
+        normalizeBarcodeLookup(product.barcode) === normalizeBarcodeLookup(normalizedBarcode)
       )
     );
 
@@ -320,6 +325,19 @@ export default function Products() {
     p.sku.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleBarcodeFieldChange = (value: string) => {
+    setFormData(prev => ({ ...prev, barcode: sanitizeBarcodeFieldValue(value) }));
+  };
+
+  const handleBarcodeFieldKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isScannerSubmitKey(event.key)) {
+      return;
+    }
+
+    event.preventDefault();
+    handleBarcodeFieldChange(event.currentTarget.value);
+  };
+
   return (
     <div className="route-workspace space-y-8">
       <ConfirmDialog
@@ -387,7 +405,9 @@ export default function Products() {
                   required
                   type="text"
                   value={formData.barcode}
-                  onChange={e => setFormData({...formData, barcode: e.target.value})}
+                  onChange={e => handleBarcodeFieldChange(e.target.value)}
+                  onKeyDown={handleBarcodeFieldKeyDown}
+                  autoComplete="off"
                   className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 />
               </div>

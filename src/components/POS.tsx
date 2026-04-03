@@ -28,6 +28,12 @@ import {
   getReceiptIdentity,
   resolveReceiptBranch
 } from '../utils/receipts';
+import {
+  isScannerSubmitKey,
+  normalizeBarcodeLookup,
+  normalizeScannerName,
+  sanitizeScannerValue
+} from '../utils/barcode';
 
 export default function POS() {
   const { user } = useAuth();
@@ -310,31 +316,38 @@ export default function POS() {
   }, [settings?.barcodeAutofocus, showReceipt]);
 
   const processBarcodeValue = (rawValue: string) => {
-    if (!rawValue.trim()) return;
+    const sanitizedValue = sanitizeScannerValue(rawValue);
+    if (!sanitizedValue) return;
 
-    let input = rawValue.trim();
+    let input = sanitizedValue;
     let multiplier = 1;
 
     // Handle quantity multiplier (e.g., 5*barcode)
     if (input.includes('*')) {
       const parts = input.split('*');
       multiplier = parseInt(parts[0]) || 1;
-      input = parts[1] || '';
+      input = sanitizeScannerValue(parts[1] || '');
     }
 
-    const queryText = input.toLowerCase();
+    if (!input) {
+      setBarcodeInput('');
+      return;
+    }
+
+    const queryText = normalizeBarcodeLookup(input);
+    const nameQueryText = normalizeScannerName(input);
     
     // Try barcode first
-    let product = allProducts.find(p => p.barcode.toLowerCase() === queryText);
+    let product = allProducts.find(p => normalizeBarcodeLookup(p.barcode) === queryText);
     
     // If not found by barcode, try SKU
     if (!product) {
-      product = allProducts.find(p => p.sku.toLowerCase() === queryText);
+      product = allProducts.find(p => normalizeBarcodeLookup(p.sku) === queryText);
     }
 
     // If still not found, try Name (exact match)
     if (!product) {
-      product = allProducts.find(p => p.name.toLowerCase() === queryText);
+      product = allProducts.find(p => normalizeScannerName(p.name) === nameQueryText);
     }
     
     if (!product) {
@@ -355,8 +368,22 @@ export default function POS() {
     processBarcodeValue(barcodeInput);
   };
 
+  const handleScannerInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isScannerSubmitKey(event.key)) {
+      return;
+    }
+
+    const scannedValue = sanitizeScannerValue(event.currentTarget.value);
+    if (!scannedValue) {
+      return;
+    }
+
+    event.preventDefault();
+    processBarcodeValue(scannedValue);
+  };
+
   useEffect(() => {
-    const trimmed = barcodeInput.trim();
+    const trimmed = sanitizeScannerValue(barcodeInput);
     const submitDelay = Math.max(60, Number(settings?.barcodeSubmitDelayMs ?? 120));
     const shouldAutoSubmit = trimmed.length >= 5 || trimmed.includes('*');
 
@@ -686,8 +713,10 @@ export default function POS() {
                   ref={inputRef}
                   type="text"
                   value={barcodeInput}
-                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  onChange={(e) => setBarcodeInput(sanitizeScannerValue(e.target.value))}
+                  onKeyDown={handleScannerInputKeyDown}
                   placeholder="Scan or type barcode, then press Enter"
+                  autoComplete="off"
                   className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-2xl outline-none transition-all placeholder:text-gray-400 text-base font-mono ${
                     isScannerFocused ? 'border-indigo-500 ring-4 ring-indigo-50' : 'border-gray-200'
                   }`}
