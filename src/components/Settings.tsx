@@ -53,6 +53,10 @@ function normalizeColor(value: string, fallback: string) {
   return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(trimmed) ? trimmed : fallback;
 }
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function formatDateTimeLocal(date: Date) {
   const pad = (value: number) => value.toString().padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -289,6 +293,36 @@ export default function Settings() {
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    if (!user) {
+      toast.error('You must be signed in to update settings.');
+      return;
+    }
+
+    const normalizedEmail = (settings.storeEmail || '').trim();
+    if (normalizedEmail && !isValidEmail(normalizedEmail)) {
+      toast.error('Enter a valid store email address before saving.');
+      return;
+    }
+
+    const widthValue = Number(settings.receiptPaperWidthMm ?? 80);
+    if (!Number.isFinite(widthValue) || widthValue < 58 || widthValue > 120) {
+      toast.error('Receipt paper width must be between 58mm and 120mm.');
+      return;
+    }
+
+    const fontSizeValue = Number(settings.receiptFontSizePx ?? 12);
+    if (!Number.isFinite(fontSizeValue) || fontSizeValue < 9 || fontSizeValue > 18) {
+      toast.error('Receipt font size must be between 9px and 18px.');
+      return;
+    }
+
+    const scannerDelayValue = Number(settings.barcodeSubmitDelayMs ?? 120);
+    if (!Number.isFinite(scannerDelayValue) || scannerDelayValue < 60) {
+      toast.error('Scanner auto-submit delay must be at least 60ms.');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const updatedSettings = {
@@ -296,11 +330,11 @@ export default function Settings() {
         businessName: (settings.businessName || '').trim() || 'KingKush Sale',
         storeAddress: (settings.storeAddress || '').trim(),
         storePhone: (settings.storePhone || '').trim(),
-        storeEmail: (settings.storeEmail || '').trim(),
+        storeEmail: normalizedEmail,
         receiptHeader: (settings.receiptHeader || '').trim() || DEFAULT_SETTINGS.receiptHeader,
         receiptFooter: (settings.receiptFooter || '').trim() || DEFAULT_SETTINGS.receiptFooter,
-        receiptPaperWidthMm: clamp(Number(settings.receiptPaperWidthMm ?? 80), 58, 120),
-        receiptFontSizePx: clamp(Number(settings.receiptFontSizePx ?? 12), 9, 18),
+        receiptPaperWidthMm: clamp(widthValue, 58, 120),
+        receiptFontSizePx: clamp(fontSizeValue, 9, 18),
         receiptBrandColor: normalizeColor(settings.receiptBrandColor || '', DEFAULT_SETTINGS.receiptBrandColor || '#4f46e5'),
         receiptSaleTitle: (settings.receiptSaleTitle || '').trim() || DEFAULT_SETTINGS.receiptSaleTitle,
         receiptRefundTitle: (settings.receiptRefundTitle || '').trim() || DEFAULT_SETTINGS.receiptRefundTitle,
@@ -321,7 +355,7 @@ export default function Settings() {
         drawerEnabled: Boolean(settings.drawerEnabled),
         drawerAutoOpenOnCashSale: Boolean(settings.drawerAutoOpenOnCashSale),
         drawerHelperUrl: (settings.drawerHelperUrl || DEFAULT_SETTINGS.drawerHelperUrl || '').trim() || DEFAULT_SETTINGS.drawerHelperUrl,
-        barcodeSubmitDelayMs: Math.max(60, Number(settings.barcodeSubmitDelayMs || 120)),
+        barcodeSubmitDelayMs: Math.max(60, scannerDelayValue),
         updatedAt: new Date().toISOString()
       };
 
@@ -338,6 +372,7 @@ export default function Settings() {
       void refreshSystemReport();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'settings');
+      toast.error(error instanceof Error ? error.message : 'Failed to save settings');
     } finally {
       setIsSaving(false);
     }
@@ -540,7 +575,7 @@ export default function Settings() {
       </div>
 
       <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-        <form onSubmit={handleSave} className="space-y-10">
+        <form onSubmit={handleSave} noValidate className="space-y-10">
           <section className="space-y-6">
             <div className="flex items-center gap-3 pb-4 border-b border-gray-50">
               <Store className="w-5 h-5 text-indigo-600" />
