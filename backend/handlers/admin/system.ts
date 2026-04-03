@@ -11,8 +11,18 @@ type SystemIssue = {
   title: string;
   summary: string;
   fix: string;
+  componentId?: string;
   route?: string;
   file?: string;
+};
+
+type ModuleHealthStatus = 'ok' | 'warning' | 'error';
+
+type ModuleHealthEntry = ComponentCatalogEntry & {
+  status: ModuleHealthStatus;
+  summary: string;
+  fix?: string;
+  issueCount: number;
 };
 
 type ComponentCatalogEntry = {
@@ -276,6 +286,10 @@ const HISTORY_SCOPES: Array<{
 ];
 
 const RECEIPT_KIND_OPTIONS: DeletableReceiptKind[] = ['sale', 'refund', 'credit-payment', 'expense', 'cash-shift'];
+
+function isValidHexColor(value: string | null | undefined) {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test((value || '').trim());
+}
 
 function escapeLike(value: string) {
   return value.replace(/[\\%_]/g, '\\$&');
@@ -967,12 +981,15 @@ async function buildSystemStatusReport() {
     productCount,
     customerCount,
     salesCount,
+    saleItemCount,
     creditsCount,
     creditPaymentCount,
     inventoryCount,
     auditCount,
     cashShiftCount,
+    cashMovementCount,
     openCashShiftCount,
+    lowStockProductCount,
     categoriesCount,
     suppliersCount,
     expenseCount,
@@ -981,7 +998,17 @@ async function buildSystemStatusReport() {
     labelTemplateCount,
     labelHistoryCount,
     settingsRow,
-    adminCoverageRow
+    adminCoverageRow,
+    salesWithoutItemsRow,
+    cashiersWithoutBranchRow,
+    productsMissingCategoryRow,
+    productsMissingSupplierRow,
+    productsNonPositivePriceRow,
+    productsNegativeStockRow,
+    openCreditsWithoutCustomerRow,
+    staleOpenShiftsRow,
+    salesWithoutBranchRow,
+    inventoryWithoutBranchRow
   ] = await Promise.all([
     countTable('users'),
     queryOne<{ count: string }>("SELECT COUNT(*)::text AS count FROM users WHERE status = 'active'"),
@@ -989,12 +1016,15 @@ async function buildSystemStatusReport() {
     countTable('products'),
     countTable('customers'),
     countTable('sales'),
+    countTable('sale_items'),
     countTable('credits'),
     countTable('credit_payments'),
     countTable('inventory_ledger'),
     countTable('audit_logs'),
     countTable('cash_shifts'),
+    countTable('cash_movements'),
     queryOne<{ count: string }>("SELECT COUNT(*)::text AS count FROM cash_shifts WHERE status = 'open'"),
+    queryOne<{ count: string }>('SELECT COUNT(*)::text AS count FROM products WHERE stock_quantity <= low_stock_threshold'),
     countDocuments('categories'),
     countDocuments('suppliers'),
     countDocuments('expenses'),
@@ -1020,8 +1050,58 @@ async function buildSystemStatusReport() {
         COUNT(*) FILTER (WHERE role = 'superadmin' AND status = 'active')::text AS superadmin_count
       FROM users
       `
+    ),
+    queryOne<{ count: string }>(
+      `
+      SELECT COUNT(*)::text AS count
+      FROM sales s
+      LEFT JOIN sale_items si ON si.sale_id = s.id
+      WHERE si.id IS NULL
+      `
+    ),
+    queryOne<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM users WHERE status = 'active' AND role = 'cashier' AND COALESCE(branch_id, '') = ''"
+    ),
+    queryOne<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM products WHERE COALESCE(category_id, '') = ''"
+    ),
+    queryOne<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM products WHERE COALESCE(supplier_id, '') = ''"
+    ),
+    queryOne<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM products WHERE selling_price <= 0'
+    ),
+    queryOne<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM products WHERE stock_quantity < 0'
+    ),
+    queryOne<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM credits WHERE status = 'open' AND (customer_id IS NULL OR COALESCE(customer_name, '') = '')"
+    ),
+    queryOne<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM cash_shifts WHERE status = 'open' AND opened_at < NOW() - INTERVAL '24 hours'"
+    ),
+    queryOne<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM sales WHERE COALESCE(branch_id, '') = ''"
+    ),
+    queryOne<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM inventory_ledger WHERE COALESCE(branch_id, '') = ''"
     )
   ]);
+
+  const defaultBranchExistsRow =
+    settingsRow?.default_branch_id?.trim()
+      ? await queryOne<{ id: string }>('SELECT id FROM branches WHERE id = $1 LIMIT 1', [settingsRow.default_branch_id.trim()])
+      : null;
+
+  const receiptPaperWidthMm = Number(settingsRow?.receipt_paper_width_mm ?? 80);
+  const receiptFontSizePx = Number(settingsRow?.receipt_font_size_px ?? 12);
+  const receiptBrandColor = settingsRow?.receipt_brand_color || '#4f46e5';
+  const hasBusinessName = Boolean(settingsRow?.business_name?.trim());
+  const hasDefaultBranch = Boolean(settingsRow?.default_branch_id?.trim());
+  const hasValidDefaultBranch = !hasDefaultBranch ? false : Boolean(defaultBranchExistsRow?.id);
+  const receiptWidthInvalid = !Number.isFinite(receiptPaperWidthMm) || receiptPaperWidthMm < 58 || receiptPaperWidthMm > 120;
+  const receiptFontInvalid = !Number.isFinite(receiptFontSizePx) || receiptFontSizePx < 9 || receiptFontSizePx > 18;
+  const receiptColorInvalid = !isValidHexColor(receiptBrandColor);
 
   const counts = {
     users: userCount,
@@ -1030,12 +1110,15 @@ async function buildSystemStatusReport() {
     products: productCount,
     customers: customerCount,
     sales: salesCount,
+    saleItems: saleItemCount,
     credits: creditsCount,
     creditPayments: creditPaymentCount,
     inventoryTransactions: inventoryCount,
     auditLogs: auditCount,
     cashShifts: cashShiftCount,
+    cashMovements: cashMovementCount,
     openCashShifts: Number(openCashShiftCount?.count ?? '0'),
+    lowStockProducts: Number(lowStockProductCount?.count ?? '0'),
     categories: categoriesCount,
     suppliers: suppliersCount,
     expenses: expenseCount,
@@ -1045,127 +1128,381 @@ async function buildSystemStatusReport() {
     labelHistory: labelHistoryCount
   };
 
+  const diagnostics = {
+    salesWithoutItems: Number(salesWithoutItemsRow?.count ?? '0'),
+    cashiersWithoutBranch: Number(cashiersWithoutBranchRow?.count ?? '0'),
+    productsMissingCategory: Number(productsMissingCategoryRow?.count ?? '0'),
+    productsMissingSupplier: Number(productsMissingSupplierRow?.count ?? '0'),
+    productsNonPositivePrice: Number(productsNonPositivePriceRow?.count ?? '0'),
+    productsNegativeStock: Number(productsNegativeStockRow?.count ?? '0'),
+    openCreditsWithoutCustomer: Number(openCreditsWithoutCustomerRow?.count ?? '0'),
+    staleOpenShifts: Number(staleOpenShiftsRow?.count ?? '0'),
+    salesWithoutBranch: Number(salesWithoutBranchRow?.count ?? '0'),
+    inventoryWithoutBranch: Number(inventoryWithoutBranchRow?.count ?? '0')
+  };
+
   const issues: SystemIssue[] = [];
+  const pushIssue = (issue: SystemIssue) => issues.push(issue);
 
   if (counts.branches === 0) {
-    issues.push({
+    pushIssue({
       id: 'no-branches',
       severity: 'critical',
       title: 'No branches configured',
       summary: 'Receipts, user assignment and branch-level reporting need at least one active branch.',
       fix: 'Create a branch in the Branches page, then set it as default in Settings.',
+      componentId: 'branches',
       route: '/branches',
       file: 'src/components/Branches.tsx'
     });
   }
 
   if (counts.products === 0) {
-    issues.push({
+    pushIssue({
       id: 'no-products',
       severity: 'critical',
       title: 'No products available for sale',
       summary: 'The POS screen cannot sell items until products exist.',
       fix: 'Add products with price, stock and barcode/SKU in the Products page.',
+      componentId: 'pos',
       route: '/products',
       file: 'src/components/Products.tsx'
     });
   }
 
   if (counts.categories === 0) {
-    issues.push({
+    pushIssue({
       id: 'no-categories',
       severity: 'warning',
       title: 'No product categories found',
       summary: 'Products can still exist, but catalog organization and reporting will be weaker.',
       fix: 'Create at least one category from the Categories page and link products to it.',
+      componentId: 'categories',
       route: '/categories',
       file: 'src/components/Categories.tsx'
     });
   }
 
   if (counts.suppliers === 0) {
-    issues.push({
+    pushIssue({
       id: 'no-suppliers',
       severity: 'warning',
       title: 'No suppliers configured',
       summary: 'Receiving, procurement and supplier-based cost tracking work better with supplier records.',
       fix: 'Create suppliers in the Suppliers page before raising purchase orders or receiving stock.',
+      componentId: 'suppliers',
       route: '/suppliers',
       file: 'src/components/Suppliers.tsx'
     });
   }
 
-  if (!settingsRow?.business_name?.trim()) {
-    issues.push({
+  if (!hasBusinessName) {
+    pushIssue({
       id: 'missing-business-name',
       severity: 'warning',
       title: 'Receipt identity is incomplete',
       summary: 'Business name is missing from system settings, which weakens receipt branding.',
       fix: 'Set business identity and receipt appearance in Settings.',
+      componentId: 'settings',
       route: '/settings',
       file: 'src/components/Settings.tsx'
     });
   }
 
-  if (!settingsRow?.default_branch_id?.trim()) {
-    issues.push({
+  if (!hasDefaultBranch) {
+    pushIssue({
       id: 'missing-default-branch',
       severity: 'warning',
       title: 'Default branch is not configured',
       summary: 'Fallback branch selection is missing for receipts and branch-aware operations.',
       fix: 'Choose a default branch inside Settings.',
+      componentId: 'settings',
+      route: '/settings',
+      file: 'src/components/Settings.tsx'
+    });
+  }
+
+  if (hasDefaultBranch && !hasValidDefaultBranch) {
+    pushIssue({
+      id: 'invalid-default-branch',
+      severity: 'critical',
+      title: 'Default branch points to a missing branch record',
+      summary: 'Settings references a default branch that no longer exists, which breaks branch-aware receipts and fallbacks.',
+      fix: 'Pick an existing default branch in Settings or recreate the missing branch in the Branches page.',
+      componentId: 'settings',
+      route: '/settings',
+      file: 'src/components/Settings.tsx'
+    });
+  }
+
+  if (receiptWidthInvalid) {
+    pushIssue({
+      id: 'invalid-receipt-width',
+      severity: 'warning',
+      title: 'Receipt paper width is outside the supported range',
+      summary: `The configured receipt width (${receiptPaperWidthMm}) should stay between 58mm and 120mm.`,
+      fix: 'Open Settings and set the receipt paper width to a value between 58 and 120.',
+      componentId: 'settings',
+      route: '/settings',
+      file: 'src/components/Settings.tsx'
+    });
+  }
+
+  if (receiptFontInvalid) {
+    pushIssue({
+      id: 'invalid-receipt-font-size',
+      severity: 'warning',
+      title: 'Receipt font size is outside the supported range',
+      summary: `The configured receipt font size (${receiptFontSizePx}) should stay between 9px and 18px.`,
+      fix: 'Open Settings and set the receipt base font size to a value between 9 and 18.',
+      componentId: 'settings',
+      route: '/settings',
+      file: 'src/components/Settings.tsx'
+    });
+  }
+
+  if (receiptColorInvalid) {
+    pushIssue({
+      id: 'invalid-receipt-color',
+      severity: 'warning',
+      title: 'Receipt brand color is invalid',
+      summary: `The receipt brand color "${receiptBrandColor}" is not a valid hex color value.`,
+      fix: 'Open Settings and set the receipt brand color to a valid hex value like #4f46e5.',
+      componentId: 'settings',
       route: '/settings',
       file: 'src/components/Settings.tsx'
     });
   }
 
   if (settingsRow?.drawer_enabled && !settingsRow?.drawer_helper_url?.trim()) {
-    issues.push({
+    pushIssue({
       id: 'drawer-helper-missing',
       severity: 'warning',
       title: 'Cash drawer helper URL is missing',
       summary: 'Drawer integration is enabled, but no local helper URL is configured.',
       fix: 'Set the local drawer helper URL in Settings or disable drawer integration.',
+      componentId: 'settings',
       route: '/settings',
       file: 'src/components/Settings.tsx'
     });
   }
 
   if (Number(adminCoverageRow?.superadmin_count ?? '0') === 0) {
-    issues.push({
+    pushIssue({
       id: 'no-superadmin',
       severity: 'critical',
       title: 'No active superadmin account found',
       summary: 'Recovery and full-system administration require at least one active superadmin.',
       fix: 'Restore or create a superadmin account from admin tooling or database recovery.',
+      componentId: 'users',
+      route: '/users',
+      file: 'src/components/Users.tsx'
+    });
+  }
+
+  if (diagnostics.cashiersWithoutBranch > 0) {
+    pushIssue({
+      id: 'cashiers-without-branch',
+      severity: 'warning',
+      title: 'One or more active cashiers do not have a branch assignment',
+      summary: `${diagnostics.cashiersWithoutBranch} active cashier account(s) are missing a branch, which can break branch-aware receipts and till context.`,
+      fix: 'Open Users and assign each active cashier to the correct branch.',
+      componentId: 'users',
       route: '/users',
       file: 'src/components/Users.tsx'
     });
   }
 
   if (counts.expenseCategories === 0) {
-    issues.push({
+    pushIssue({
       id: 'no-expense-categories',
       severity: 'info',
       title: 'No expense categories configured',
       summary: 'Expense entry still works, but reporting is clearer with proper categories.',
       fix: 'Create expense categories from the Expenses page.',
+      componentId: 'expenses',
       route: '/expenses',
       file: 'src/components/Expenses.tsx'
     });
   }
 
   if (counts.sales === 0) {
-    issues.push({
+    pushIssue({
       id: 'no-sales-history',
       severity: 'info',
       title: 'No sales history recorded yet',
       summary: 'Sales dashboards, history and profit reporting will stay empty until trading begins.',
       fix: 'Complete a sale from the Sale page to start building operational history.',
-      route: '/pos',
-      file: 'src/components/POS.tsx'
+      componentId: 'sales-history',
+      route: '/sales-history',
+      file: 'src/components/SalesHistory.tsx'
     });
   }
+
+  if (diagnostics.salesWithoutItems > 0) {
+    pushIssue({
+      id: 'sales-without-items',
+      severity: 'critical',
+      title: 'Some sales are missing line items',
+      summary: `${diagnostics.salesWithoutItems} sale record(s) do not have matching sale items, which can break history, refunds, and profit reports.`,
+      fix: 'Inspect recent sale writes and repair the affected sales before relying on refund and profit reporting.',
+      componentId: 'sales-history',
+      route: '/sales-history',
+      file: 'src/components/SalesHistory.tsx'
+    });
+  }
+
+  if (diagnostics.openCreditsWithoutCustomer > 0) {
+    pushIssue({
+      id: 'open-credits-without-customer',
+      severity: 'warning',
+      title: 'Open credits exist without a proper customer link',
+      summary: `${diagnostics.openCreditsWithoutCustomer} open credit record(s) are missing a customer reference or customer name.`,
+      fix: 'Review the Credits page and make sure every credit sale is attached to a customer before checkout completes.',
+      componentId: 'credits',
+      route: '/credits',
+      file: 'src/components/Credits.tsx'
+    });
+  }
+
+  if (diagnostics.productsMissingCategory > 0) {
+    pushIssue({
+      id: 'products-missing-category',
+      severity: 'warning',
+      title: 'Some products are missing categories',
+      summary: `${diagnostics.productsMissingCategory} product(s) do not have a category, which weakens filtering and reporting.`,
+      fix: 'Open Products and assign categories to the affected items.',
+      componentId: 'products',
+      route: '/products',
+      file: 'src/components/Products.tsx'
+    });
+  }
+
+  if (diagnostics.productsMissingSupplier > 0) {
+    pushIssue({
+      id: 'products-missing-supplier',
+      severity: 'warning',
+      title: 'Some products are missing suppliers',
+      summary: `${diagnostics.productsMissingSupplier} product(s) do not have a supplier link, which weakens purchasing and receiving traceability.`,
+      fix: 'Open Products and assign suppliers to the affected items, or create missing supplier records first.',
+      componentId: 'products',
+      route: '/products',
+      file: 'src/components/Products.tsx'
+    });
+  }
+
+  if (diagnostics.productsNonPositivePrice > 0) {
+    pushIssue({
+      id: 'products-non-positive-price',
+      severity: 'critical',
+      title: 'Some products have a zero or negative selling price',
+      summary: `${diagnostics.productsNonPositivePrice} product(s) have a selling price less than or equal to zero, which can break checkout and profit calculations.`,
+      fix: 'Open Products and correct the selling price on the affected items before further sales.',
+      componentId: 'products',
+      route: '/products',
+      file: 'src/components/Products.tsx'
+    });
+  }
+
+  if (diagnostics.productsNegativeStock > 0) {
+    pushIssue({
+      id: 'negative-stock-detected',
+      severity: 'critical',
+      title: 'Negative stock was detected',
+      summary: `${diagnostics.productsNegativeStock} product(s) have stock below zero, which signals broken stock movement history or overselling.`,
+      fix: 'Review Inventory and recent sales/refund activity, then correct the affected quantities with an adjustment after confirming the real stock count.',
+      componentId: 'inventory',
+      route: '/inventory',
+      file: 'src/components/Inventory.tsx'
+    });
+  }
+
+  if (diagnostics.staleOpenShifts > 0) {
+    pushIssue({
+      id: 'stale-open-shifts',
+      severity: 'warning',
+      title: 'Some cashier shifts have stayed open too long',
+      summary: `${diagnostics.staleOpenShifts} open shift(s) are older than 24 hours, which can distort cash reconciliation and drawer totals.`,
+      fix: 'Close stale shifts from Cash Shifts after confirming counted cash and expected cash.',
+      componentId: 'shifts',
+      route: '/cash-shifts',
+      file: 'src/components/CashShifts.tsx'
+    });
+  }
+
+  if (counts.branches > 0 && diagnostics.salesWithoutBranch > 0) {
+    pushIssue({
+      id: 'sales-without-branch',
+      severity: 'warning',
+      title: 'Some sales are missing branch context',
+      summary: `${diagnostics.salesWithoutBranch} sale record(s) do not have a branch ID, which can weaken receipt identity and branch reports.`,
+      fix: 'Make sure a default branch is set in Settings and staff are assigned to branches before checkout.',
+      componentId: 'reports',
+      route: '/reports',
+      file: 'src/components/Reports.tsx'
+    });
+  }
+
+  if (counts.branches > 0 && diagnostics.inventoryWithoutBranch > 0) {
+    pushIssue({
+      id: 'inventory-without-branch',
+      severity: 'warning',
+      title: 'Some inventory movements are missing branch context',
+      summary: `${diagnostics.inventoryWithoutBranch} inventory ledger row(s) do not have a branch ID, which weakens branch stock traceability.`,
+      fix: 'Use branch-aware receiving and adjustments after confirming default branch and cashier assignments.',
+      componentId: 'inventory',
+      route: '/inventory',
+      file: 'src/components/Inventory.tsx'
+    });
+  }
+
+  if (counts.auditLogs === 0 && (counts.sales > 0 || counts.cashShifts > 0 || counts.expenses > 0)) {
+    pushIssue({
+      id: 'audit-trail-empty',
+      severity: 'warning',
+      title: 'Operational history exists, but the audit trail is empty',
+      summary: 'The system has live activity records but no audit log coverage, which weakens troubleshooting and accountability.',
+      fix: 'Inspect audit logging flows in operational writes and confirm audit events are being recorded.',
+      componentId: 'audit-logs',
+      route: '/audit-logs',
+      file: 'src/components/AuditLogs.tsx'
+    });
+  }
+
+  if (counts.labelTemplates === 0) {
+    pushIssue({
+      id: 'no-label-templates',
+      severity: 'info',
+      title: 'No barcode label templates are configured',
+      summary: 'Label printing is available, but no reusable label templates are stored yet.',
+      fix: 'Open Labels and save at least one label template for repeat printing.',
+      componentId: 'labels',
+      route: '/labels',
+      file: 'src/components/Labels.tsx'
+    });
+  }
+
+  const issueSummary = issues.reduce(
+    (summary, issue) => {
+      summary[issue.severity] += 1;
+      return summary;
+    },
+    { critical: 0, warning: 0, info: 0 }
+  );
+
+  const dataIntegritySeverity =
+    diagnostics.salesWithoutItems > 0 || diagnostics.productsNonPositivePrice > 0 || diagnostics.productsNegativeStock > 0
+      ? 'error'
+      : diagnostics.openCreditsWithoutCustomer > 0 || diagnostics.salesWithoutBranch > 0 || diagnostics.inventoryWithoutBranch > 0
+        ? 'warning'
+        : 'ok';
+
+  const receiptServiceSeverity =
+    !hasBusinessName || (hasDefaultBranch && !hasValidDefaultBranch)
+      ? 'error'
+      : receiptWidthInvalid || receiptFontInvalid || receiptColorInvalid || !hasDefaultBranch
+        ? 'warning'
+        : 'ok';
 
   const services = [
     {
@@ -1184,28 +1521,160 @@ async function buildSystemStatusReport() {
           : 'No active users detected.'
     },
     {
+      id: 'data-integrity',
+      label: 'Data Integrity',
+      status: dataIntegritySeverity,
+      message:
+        dataIntegritySeverity === 'error'
+          ? 'Critical record inconsistencies were detected. Review sales history, products, inventory and credits before normal trading continues.'
+          : dataIntegritySeverity === 'warning'
+            ? 'Operational data is present, but some records are missing branch or customer context.'
+            : 'No critical sales, inventory, or credit integrity issues were detected in the current snapshot.'
+    },
+    {
       id: 'receipts',
       label: 'Receipt Configuration',
-      status: settingsRow?.business_name?.trim() ? ('ok' as const) : ('warning' as const),
-      message: settingsRow?.business_name?.trim()
-        ? `Configured at ${Number(settingsRow?.receipt_paper_width_mm ?? 80)}mm width and ${Number(settingsRow?.receipt_font_size_px ?? 12)}px base font.`
-        : 'Receipt branding still needs business identity setup.'
+      status: receiptServiceSeverity,
+      message:
+        receiptServiceSeverity === 'error'
+          ? 'Receipt setup has a missing business identity or a broken default branch reference.'
+          : receiptServiceSeverity === 'warning'
+            ? 'Receipt setup is present, but one or more appearance or branch settings still need attention.'
+            : `Configured at ${receiptPaperWidthMm}mm width and ${receiptFontSizePx}px base font.`
     },
     {
       id: 'cash-drawer',
       label: 'Cash Drawer',
-      status: settingsRow?.drawer_enabled ? ('warning' as const) : ('ok' as const),
+      status: settingsRow?.drawer_enabled && !settingsRow?.drawer_helper_url?.trim() ? ('warning' as const) : ('ok' as const),
       message: settingsRow?.drawer_enabled
         ? `Drawer helper enabled at ${settingsRow.drawer_helper_url || 'no URL set'}.`
         : 'Drawer helper is disabled.'
     }
   ];
 
+  const issuesByComponent = new Map<string, SystemIssue[]>();
+  for (const issue of issues) {
+    if (!issue.componentId) {
+      continue;
+    }
+
+    const componentIssues = issuesByComponent.get(issue.componentId) || [];
+    componentIssues.push(issue);
+    issuesByComponent.set(issue.componentId, componentIssues);
+  }
+
+  const healthyModuleSummaries: Record<string, string> = {
+    dashboard:
+      counts.sales > 0
+        ? `Dashboard widgets have ${counts.sales.toLocaleString()} sale record(s) available for KPIs and recent activity.`
+        : 'Dashboard layout is healthy and will populate as sales, shifts and expenses start coming in.',
+    pos:
+      counts.products > 0
+        ? `Sale flow has ${counts.products.toLocaleString()} product(s) ready for scanner-first checkout.`
+        : 'Sale flow is waiting for sellable products.',
+    'sales-history':
+      counts.sales > 0
+        ? `Sales History has ${counts.sales.toLocaleString()} sale record(s) and ${counts.saleItems.toLocaleString()} line item(s) available for review.`
+        : 'Sales History is ready, but no completed sales have been recorded yet.',
+    shifts:
+      counts.cashShifts > 0
+        ? `Cash Shifts has ${counts.cashShifts.toLocaleString()} recorded shift(s) and ${counts.openCashShifts.toLocaleString()} currently open shift(s).`
+        : 'Cash Shifts is ready for the next till opening.',
+    customers:
+      counts.customers > 0
+        ? `Customers has ${counts.customers.toLocaleString()} customer record(s) available for credit and receipt linkage.`
+        : 'Customers is healthy, but no customer profiles have been added yet.',
+    credits:
+      counts.credits > 0
+        ? `Credits has ${counts.credits.toLocaleString()} credit record(s) and ${counts.creditPayments.toLocaleString()} payment receipt(s).`
+        : 'Credits is healthy and waiting for the first credit sale.',
+    products:
+      counts.products > 0
+        ? `Products has ${counts.products.toLocaleString()} product(s) with ${counts.lowStockProducts.toLocaleString()} currently at or below low-stock level.`
+        : 'Products is waiting for inventory items to be created.',
+    categories:
+      counts.categories > 0
+        ? `Categories has ${counts.categories.toLocaleString()} saved category record(s).`
+        : 'Categories needs at least one category to improve catalog structure.',
+    inventory:
+      counts.inventoryTransactions > 0
+        ? `Inventory is tracking ${counts.inventoryTransactions.toLocaleString()} stock movement record(s).`
+        : 'Inventory is healthy, but no stock movement history has been recorded yet.',
+    'purchase-orders':
+      counts.purchaseOrders > 0
+        ? `Purchase Orders has ${counts.purchaseOrders.toLocaleString()} saved purchase order record(s).`
+        : 'Purchase Orders is healthy and ready for procurement activity.',
+    suppliers:
+      counts.suppliers > 0
+        ? `Suppliers has ${counts.suppliers.toLocaleString()} supplier record(s) available for receiving and procurement.`
+        : 'Suppliers needs supplier records before procurement becomes fully traceable.',
+    branches:
+      counts.branches > 0
+        ? `Branches has ${counts.branches.toLocaleString()} branch record(s) configured for till assignment and receipts.`
+        : 'Branches needs at least one store location.',
+    labels:
+      counts.labelTemplates > 0
+        ? `Labels has ${counts.labelTemplates.toLocaleString()} template(s) and ${counts.labelHistory.toLocaleString()} print history record(s).`
+        : 'Labels is healthy, but no reusable templates are stored yet.',
+    users:
+      counts.activeUsers > 0
+        ? `Users has ${counts.activeUsers.toLocaleString()} active account(s) available for sign-in.`
+        : 'Users needs at least one active account.',
+    'audit-logs':
+      counts.auditLogs > 0
+        ? `Audit Logs has ${counts.auditLogs.toLocaleString()} recorded audit event(s).`
+        : 'Audit Logs is enabled, but no audit events have been captured yet.',
+    expenses:
+      counts.expenses > 0
+        ? `Expenses has ${counts.expenses.toLocaleString()} recorded voucher(s) across ${counts.expenseCategories.toLocaleString()} expense categor${counts.expenseCategories === 1 ? 'y' : 'ies'}.`
+        : 'Expenses is healthy and waiting for the first recorded expense.',
+    reports:
+      counts.sales > 0 || counts.expenses > 0 || counts.inventoryTransactions > 0
+        ? 'Reports has the operational data it needs to export sales, profit, expense and movement reports.'
+        : 'Reports is ready, but exports will stay light until the system builds more trading history.',
+    settings:
+      hasBusinessName
+        ? 'Settings has active receipt, scanner and branch controls available for administration.'
+        : 'Settings is available, but store identity still needs configuration.',
+    status:
+      issues.length > 0
+        ? `System Status detected ${issueSummary.critical} critical, ${issueSummary.warning} warning, and ${issueSummary.info} informational issue(s).`
+        : 'System Status did not detect any current configuration or data integrity warnings.'
+  };
+
+  const moduleHealth: ModuleHealthEntry[] = COMPONENT_CATALOG.map((component) => {
+    const componentIssues = issuesByComponent.get(component.id) || [];
+    const status: ModuleHealthStatus = componentIssues.some((issue) => issue.severity === 'critical')
+      ? 'error'
+      : componentIssues.length > 0
+        ? 'warning'
+        : 'ok';
+
+    return {
+      ...component,
+      status,
+      summary:
+        componentIssues.length > 0
+          ? `${componentIssues.length} issue(s) detected. ${componentIssues[0]?.summary || component.functionality}`
+          : healthyModuleSummaries[component.id] || component.functionality,
+      fix:
+        componentIssues.length > 0
+          ? componentIssues
+              .slice(0, 2)
+              .map((issue) => issue.fix)
+              .join(' ')
+          : undefined,
+      issueCount: componentIssues.length
+    };
+  });
+
   return {
     generatedAt: new Date().toISOString(),
     services,
+    issueSummary,
     counts,
     issues,
+    moduleHealth,
     components: COMPONENT_CATALOG,
     historyScopes: await Promise.all(
       HISTORY_SCOPES.map(async (scope) => {
@@ -1231,9 +1700,9 @@ async function buildSystemStatusReport() {
       })
     ),
     receiptAppearance: {
-      brandColor: settingsRow?.receipt_brand_color || '#4f46e5',
-      paperWidthMm: Number(settingsRow?.receipt_paper_width_mm ?? 80),
-      fontSizePx: Number(settingsRow?.receipt_font_size_px ?? 12),
+      brandColor: receiptBrandColor,
+      paperWidthMm: receiptPaperWidthMm,
+      fontSizePx: receiptFontSizePx,
       header: settingsRow?.receipt_header || 'Thank you for shopping with us!',
       footer: settingsRow?.receipt_footer || 'Goods once sold are not returnable.'
     }

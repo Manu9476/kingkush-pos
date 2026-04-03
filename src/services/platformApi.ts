@@ -11,8 +11,22 @@ export type SystemIssueReport = {
   title: string;
   summary: string;
   fix: string;
+  componentId?: string;
   route?: string;
   file?: string;
+};
+
+export type SystemModuleHealthReport = {
+  id: string;
+  label: string;
+  route: string;
+  permission: string;
+  file: string;
+  functionality: string;
+  status: 'ok' | 'warning' | 'error';
+  summary: string;
+  fix?: string;
+  issueCount: number;
 };
 
 export type SystemComponentCatalogEntry = {
@@ -52,6 +66,11 @@ export type SystemReceiptSearchResult = {
 
 export type SystemStatusReport = {
   generatedAt: string;
+  issueSummary: {
+    critical: number;
+    warning: number;
+    info: number;
+  };
   services: Array<{
     id: string;
     label: string;
@@ -60,6 +79,7 @@ export type SystemStatusReport = {
   }>;
   counts: Record<string, number>;
   issues: SystemIssueReport[];
+  moduleHealth: SystemModuleHealthReport[];
   components: SystemComponentCatalogEntry[];
   historyScopes: SystemHistoryScope[];
   receiptAppearance: {
