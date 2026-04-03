@@ -1068,17 +1068,22 @@ function buildExplicitUpdate(config: ExplicitConfig, id: string, data: Record<st
   const writableFields = config.writableFields || [];
   const assignments: string[] = [];
   const params: unknown[] = [];
+  const assignedColumns = new Set<string>();
 
   for (const field of writableFields) {
     const descriptor = config.fieldMap[field];
     if (!descriptor || !(field in data)) {
       continue;
     }
+    if (assignedColumns.has(descriptor.column)) {
+      continue;
+    }
     params.push(transformInputValue(descriptor.type, data[field]));
     assignments.push(`${descriptor.column} = $${params.length}`);
+    assignedColumns.add(descriptor.column);
   }
 
-  if (config.fieldMap.updatedAt) {
+  if (config.fieldMap.updatedAt && !assignedColumns.has(config.fieldMap.updatedAt.column)) {
     params.push(new Date().toISOString());
     assignments.push(`${config.fieldMap.updatedAt.column} = $${params.length}`);
   }
