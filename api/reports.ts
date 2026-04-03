@@ -95,7 +95,7 @@ export default async function handler(req: any, res: any) {
         l.unit_cost::text,
         b.name AS branch_name,
         b.code AS branch_code,
-        sup.name AS supplier_name,
+        COALESCE(sup.payload->>'name', '') AS supplier_name,
         COALESCE(u.display_name, u.username, s.cashier_name, 'System') AS moved_by_name,
         u.username AS moved_by_username,
         s.customer_name,
@@ -105,7 +105,9 @@ export default async function handler(req: any, res: any) {
       FROM inventory_ledger l
       INNER JOIN products p ON p.id = l.product_id
       LEFT JOIN users u ON u.id = l.user_id
-      LEFT JOIN suppliers sup ON sup.id = l.supplier_id
+      LEFT JOIN app_documents sup
+        ON sup.collection_name = 'suppliers'
+       AND sup.id = l.supplier_id
       LEFT JOIN branches b ON b.id = l.branch_id
       LEFT JOIN sales s ON s.id = l.source_id AND l.source_type IN ('sale', 'refund')
       WHERE l.created_at >= $1::timestamptz

@@ -465,12 +465,12 @@ export default function Reports() {
 
       const itemsBySale = new Map<string, any[]>();
       itemsSnapshot.docs.forEach((itemDoc) => {
-        const saleId = itemDoc.ref.parent.parent?.id;
+        const itemData = itemDoc.data();
+        const saleId = typeof itemData.saleId === 'string' ? itemData.saleId : undefined;
         if (!saleId || !saleIds.has(saleId)) {
           return;
         }
 
-        const itemData = itemDoc.data();
         if (!itemsBySale.has(saleId)) {
           itemsBySale.set(saleId, []);
         }
