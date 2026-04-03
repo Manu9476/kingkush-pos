@@ -360,18 +360,28 @@ export default function Settings() {
       };
 
       await setDoc(doc(db, 'settings', 'system'), updatedSettings);
-      await recordAuditLog(
-        user!.uid,
-        user!.displayName || user!.username,
-        'UPDATE_SETTINGS',
-        'Updated store profile, scanner behavior, receipt settings, cash drawer integration, and business rules'
-      );
       setSettings(updatedSettings);
       setShowSuccess(true);
+      toast.success('Settings saved successfully.');
       setTimeout(() => setShowSuccess(false), 3000);
       void refreshSystemReport();
+
+      try {
+        await recordAuditLog(
+          user.uid,
+          user.displayName || user.username,
+          'UPDATE_SETTINGS',
+          'Updated store profile, scanner behavior, receipt settings, cash drawer integration, and business rules'
+        );
+      } catch (auditError) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Settings audit log failed', auditError);
+        }
+      }
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'settings');
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to save settings', error);
+      }
       toast.error(error instanceof Error ? error.message : 'Failed to save settings');
     } finally {
       setIsSaving(false);
