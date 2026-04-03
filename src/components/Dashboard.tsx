@@ -281,8 +281,8 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="route-workspace space-y-8">
+      <div className="route-header flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard Overview</h1>
           <p className="text-gray-500">Welcome back, {user?.displayName}! Here's what's happening today.</p>
@@ -298,6 +298,7 @@ export default function Dashboard() {
         )}
       </div>
 
+      <div className="route-body desktop-scroll pr-1 custom-scrollbar">
       {showHealth && ['superadmin', 'admin'].includes(user?.role || '') && (
         <div className="animate-in fade-in slide-in-from-top-4 duration-300">
           <ReadinessPanel />
@@ -491,6 +492,7 @@ export default function Dashboard() {
             </tbody>
           </table>
         </div>
+      </div>
       </div>
       {/* Preview Modal */}
       <AnimatePresence>

@@ -362,7 +362,7 @@ export default function Labels() {
   const totalLabels = batch.reduce((sum, item) => sum + item.copies, 0);
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="route-workspace space-y-8 pb-20">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -371,6 +371,7 @@ export default function Labels() {
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
         type={confirmConfig.type}
       />
+      <div className="route-body desktop-scroll pr-1 custom-scrollbar">
       <div className="bg-white p-8 rounded-4xl shadow-sm border border-gray-100">
         <h1 className="text-3xl font-black text-gray-900 mb-2">Barcode Label Sheets</h1>
         <p className="text-gray-500 mb-8">Choose a product and label size, then print a sheet for sticker paper.</p>
@@ -651,6 +652,7 @@ export default function Labels() {
         </div>
       </div>
 
+      </div>
       {/* History Modal */}
       {showHistory && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">

@@ -310,7 +310,7 @@ export default function PurchaseOrders() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="route-workspace space-y-6">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -319,7 +319,7 @@ export default function PurchaseOrders() {
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
         type={confirmConfig.type}
       />
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="route-header flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Purchase Orders</h1>
           <p className="text-gray-500 font-medium">Manage stock procurement and supplier deliveries</p>
@@ -337,7 +337,8 @@ export default function PurchaseOrders() {
         </button>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="route-body desktop-scroll pr-1 custom-scrollbar">
+        <div className="desktop-card bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -351,7 +352,7 @@ export default function PurchaseOrders() {
           </div>
         </div>
 
-        <div className="overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
+        <div className="desktop-table-scroll overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="bg-gray-50/50">
@@ -405,6 +406,7 @@ export default function PurchaseOrders() {
               ))}
             </tbody>
           </table>
+        </div>
         </div>
       </div>
 

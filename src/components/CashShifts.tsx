@@ -338,12 +338,13 @@ export default function CashShifts() {
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      <div className="flex flex-col gap-2">
+    <div className="route-workspace space-y-8 max-w-7xl mx-auto">
+      <div className="route-header flex flex-col gap-2">
         <h1 className="text-3xl font-bold text-gray-900">Cashier Shifts</h1>
         <p className="text-sm text-gray-500">Open tills, track cash movements, and close each shift with proper reconciliation.</p>
       </div>
 
+      <div className="route-body desktop-scroll pr-1 custom-scrollbar">
       {!currentShift ? (
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-8 py-6 border-b border-gray-50">
@@ -613,7 +614,7 @@ export default function CashShifts() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="desktop-table-scroll overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50/70 text-left">
               <tr>
@@ -817,6 +818,7 @@ export default function CashShifts() {
           </div>
         </div>
       )}
+      </div>
 
       {selectedReport && (
         <div id="cash-shift-receipt" className="hidden print:block font-mono text-[12px] leading-tight p-4 w-[80mm]">

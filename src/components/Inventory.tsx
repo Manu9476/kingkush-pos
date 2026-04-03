@@ -166,8 +166,8 @@ export default function Inventory() {
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      <div className="flex justify-between items-end">
+    <div className="route-workspace space-y-8 max-w-7xl mx-auto">
+      <div className="route-header flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Inventory Tracking</h1>
           <p className="text-gray-500">Monitor stock levels and movement history.</p>
@@ -180,10 +180,11 @@ export default function Inventory() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="route-body">
+      <div className="route-grid grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Stock Actions */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 space-y-8">
+        <div className="lg:col-span-4 desktop-card">
+          <div className="desktop-card bg-white p-8 rounded-3xl shadow-sm border border-gray-100 space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">Stock Actions</h2>
               <button 
@@ -217,7 +218,7 @@ export default function Inventory() {
             </div>
 
             {activeAction === 'receiving' && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="desktop-form-scroll space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 pr-1 custom-scrollbar">
                 <h3 className="font-bold text-gray-900 flex items-center gap-2">
                   <Truck className="w-5 h-5 text-indigo-600" />
                   Supplier Receiving
@@ -305,7 +306,7 @@ export default function Inventory() {
             )}
 
             {activeAction === 'stock-in' && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="desktop-form-scroll space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 pr-1 custom-scrollbar">
                 <h3 className="font-bold text-gray-900 flex items-center gap-2">
                   <PackagePlus className="w-5 h-5 text-indigo-600" />
                   Stock In
@@ -363,7 +364,7 @@ export default function Inventory() {
             )}
 
             {activeAction === 'adjustment' && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="desktop-form-scroll space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 pr-1 custom-scrollbar">
                 <h3 className="font-bold text-gray-900 flex items-center gap-2">
                   <Settings className="w-5 h-5 text-indigo-600" />
                   Adjustment
@@ -439,8 +440,8 @@ export default function Inventory() {
         </div>
 
         {/* Right: Overview & Transactions */}
-        <div className="lg:col-span-8 space-y-8">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 min-h-[38rem]">
+        <div className="lg:col-span-8 desktop-card space-y-6">
+          <div className="desktop-card bg-white p-8 rounded-3xl shadow-sm border border-gray-100 min-h-0">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-xl font-bold text-gray-900">Stock Levels</h3>
               <div className="relative w-72">
@@ -454,7 +455,7 @@ export default function Inventory() {
                 />
               </div>
             </div>
-            <div className="overflow-x-auto min-h-[30rem] max-h-[30rem] overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
+            <div className="desktop-table-scroll overflow-x-auto min-h-0 max-h-[30rem] overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
               <table className="w-full text-left">
                 <thead className="sticky top-0 bg-white z-10 shadow-sm text-[10px] uppercase font-bold text-gray-600 tracking-widest border-b border-gray-100">
                   <tr className="bg-white">
@@ -494,9 +495,9 @@ export default function Inventory() {
             </div>
           </div>
 
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+          <div className="desktop-card bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
             <h3 className="text-xl font-bold text-gray-900 mb-8">Stock Movement</h3>
-            <div className="max-h-112.5 overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl p-6 shadow-inner bg-gray-50/30">
+            <div className="desktop-list-scroll max-h-112.5 overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl p-6 shadow-inner bg-gray-50/30">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {transactions.map(t => {
                   const product = products.find(p => p.id === t.productId);
@@ -530,6 +531,7 @@ export default function Inventory() {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

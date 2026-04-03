@@ -596,7 +596,7 @@ export default function POS() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="route-workspace max-w-6xl mx-auto space-y-8">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -605,6 +605,7 @@ export default function POS() {
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
         type={confirmConfig.type}
       />
+      <div className="route-header space-y-4">
       <div className="flex flex-col gap-1">
         <p className="text-sm text-indigo-600 font-medium">Fast checkout workflow with scanner-first input and real-time totals.</p>
         <h1 className="text-2xl font-bold text-gray-900">New Sale</h1>
@@ -632,10 +633,13 @@ export default function POS() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      </div>
+
+      <div className="route-body">
+        <div className="route-grid grid grid-cols-1 items-stretch gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(21rem,0.95fr)]">
         {/* Left: Sale Details */}
-        <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-8">
+          <div className="desktop-card">
+            <div className="desktop-card bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                 <ShoppingCart className="w-6 h-6 text-indigo-600" />
@@ -659,7 +663,7 @@ export default function POS() {
               </div>
             </div>
           
-          <div className="space-y-6">
+          <div className="space-y-5">
             <form onSubmit={handleScan} className="space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-sm font-medium text-gray-600">Scan Barcode</label>
@@ -734,7 +738,7 @@ export default function POS() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="desktop-card space-y-4">
             <div className="grid grid-cols-12 gap-4 pb-2 border-b border-gray-100 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
               <div className="col-span-6">ITEM</div>
               <div className="col-span-2 text-center">QTY</div>
@@ -742,7 +746,7 @@ export default function POS() {
               <div className="col-span-2 text-right">TOTAL</div>
             </div>
 
-            <div className="space-y-4 min-h-50">
+            <div className="desktop-list-scroll space-y-4 min-h-0 pr-1 custom-scrollbar">
               {cart.length === 0 ? (
                 <p className="text-gray-600 py-8 text-center font-medium">Cart is empty — scan a product to begin.</p>
               ) : (
@@ -780,15 +784,15 @@ export default function POS() {
                 ))
               )}
             </div>
+            </div>
           </div>
         </div>
-      </div>
 
         {/* Right: Checkout Panel */}
-        <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-8">
+        <div className="desktop-card bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6">
           <h2 className="text-3xl font-bold text-gray-900">Checkout</h2>
 
-          <div className="space-y-2">
+          <div className="space-y-2 shrink-0">
             <div className="flex justify-between text-gray-600">
               <span className="text-lg">Subtotal: KES {subtotal.toLocaleString()}</span>
             </div>
@@ -800,7 +804,7 @@ export default function POS() {
             </div>
           </div>
 
-          <div className="space-y-6">
+          <div className="desktop-form-scroll space-y-5 pr-1 custom-scrollbar">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">Payment Method</label>
               <select 
@@ -970,6 +974,7 @@ export default function POS() {
             </button>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Receipt Modal */}

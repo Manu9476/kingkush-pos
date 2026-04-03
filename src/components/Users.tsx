@@ -275,7 +275,7 @@ export default function Users() {
   const selectedPreset = ROLE_PERMISSION_PRESETS[formData.role];
 
   return (
-    <div className="space-y-8">
+    <div className="route-workspace space-y-8">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -284,19 +284,20 @@ export default function Users() {
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
         type={confirmConfig.type}
       />
-      <div>
+      <div className="route-header">
         <h1 className="text-2xl font-bold text-gray-900">Users</h1>
         <p className="text-gray-500">Superadmin manages admins and cashiers. Admin manages cashiers only.</p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <div className="route-body">
+      <div className="route-grid grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Create User Form */}
         <div className="xl:col-span-1">
-          <div className="bg-white rounded-[1.95rem] shadow-sm border border-gray-100 overflow-hidden">
+          <div className="desktop-card bg-white rounded-[1.95rem] shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-8 border-b border-gray-50">
               <h2 className="text-xl font-bold text-gray-900">Create User</h2>
             </div>
-            <form onSubmit={handleCreateUser} className="p-8 space-y-6">
+            <form onSubmit={handleCreateUser} className="desktop-form-scroll p-8 space-y-6 custom-scrollbar">
               {error && (
                 <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm font-medium">
                   {error}
@@ -443,12 +444,12 @@ export default function Users() {
 
         {/* Users Table */}
         <div className="xl:col-span-2">
-          <div className="bg-white rounded-[1.95rem] shadow-sm border border-gray-100 overflow-hidden">
+          <div className="desktop-card bg-white rounded-[1.95rem] shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-8 border-b border-gray-50 flex justify-between items-center">
               <h2 className="text-xl font-bold text-gray-900">System Users</h2>
               <span className="text-sm text-gray-500">Account status and role controls</span>
             </div>
-            <div className="overflow-x-auto overflow-y-auto pr-2 custom-scrollbar" style={{ maxHeight: '598px' }}>
+            <div className="desktop-table-scroll overflow-x-auto overflow-y-auto pr-2 custom-scrollbar" style={{ maxHeight: '598px' }}>
               <table className="w-full text-left border-collapse">
                 <thead className="sticky top-0 bg-white z-10 shadow-sm">
                   <tr className="bg-gray-50/50">
@@ -556,6 +557,7 @@ export default function Users() {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Change Password Modal */}

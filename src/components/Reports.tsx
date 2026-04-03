@@ -674,8 +674,8 @@ export default function Reports() {
   const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'];
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="route-workspace space-y-8 max-w-7xl mx-auto">
+      <div className="route-header flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Business Reports</h1>
           <p className="text-gray-500">Choose a reporting window, export CSVs, and track product movement in one place.</p>
@@ -695,6 +695,7 @@ export default function Reports() {
         </div>
       </div>
 
+      <div className="route-body desktop-scroll pr-1 custom-scrollbar">
       {reportLoadError && (
         <div className="rounded-3xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
           {reportLoadError}
@@ -969,7 +970,7 @@ export default function Reports() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <h3 className="font-bold text-gray-900 mb-2">Recent Sales In Range</h3>
           <p className="text-xs text-gray-500 mb-6">{selectedWindow ? selectedWindow.label : 'Invalid date range'}</p>
-          <div className="overflow-x-auto max-h-100 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="desktop-table-scroll overflow-x-auto max-h-100 overflow-y-auto pr-2 custom-scrollbar">
             <table className="w-full text-left">
               <thead className="sticky top-0 bg-white z-10 shadow-sm text-xs text-gray-600 uppercase">
                 <tr className="bg-gray-50/50">
@@ -1008,6 +1009,7 @@ export default function Reports() {
             </table>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

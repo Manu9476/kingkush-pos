@@ -219,12 +219,13 @@ export default function Settings() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
-      <div className="flex flex-col gap-1">
+    <div className="route-workspace max-w-5xl mx-auto space-y-8">
+      <div className="route-header flex flex-col gap-1">
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500">Manage account security, branch defaults, receipt identity, scanner behavior, and cash drawer integration.</p>
       </div>
 
+      <div className="route-body desktop-scroll pr-1 custom-scrollbar">
       <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
         <div className="flex items-center gap-6">
           <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center">
@@ -570,6 +571,7 @@ export default function Settings() {
         <p className="text-sm text-indigo-700 leading-relaxed">
           Use the branch directory to create each location first, set the default branch here, and then assign every cashier to the right branch from the Users page.
         </p>
+      </div>
       </div>
     </div>
   );

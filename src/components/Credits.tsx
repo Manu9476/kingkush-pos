@@ -112,16 +112,17 @@ export default function Credits() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div className="flex flex-col gap-1">
+    <div className="route-workspace max-w-7xl mx-auto space-y-8">
+      <div className="route-header flex flex-col gap-1">
         <h1 className="text-3xl font-bold text-gray-900">Customer Credits</h1>
         <p className="text-sm text-gray-500">Track outstanding balances and record customer credit payments.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <div className="route-body">
+      <div className="route-grid grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left: Open Credit Sales */}
-        <div className="lg:col-span-3 space-y-6">
-          <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6">
+        <div className="lg:col-span-3 desktop-card space-y-6">
+          <div className="desktop-card bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-900">Open Credit Sales</h2>
               <div className="text-sm text-gray-500 font-medium">
@@ -144,7 +145,7 @@ export default function Credits() {
               <p className="text-xs text-gray-500">Filter credit records as you type.</p>
             </div>
 
-            <div className="overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="desktop-table-scroll overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
               <table className="w-full">
                 <thead className="sticky top-0 bg-white z-10 shadow-sm">
                   <tr className="text-[10px] font-bold text-gray-600 uppercase tracking-widest border-b border-gray-50">
@@ -214,11 +215,11 @@ export default function Credits() {
         </div>
 
         {/* Right: Record Payment Form */}
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6 sticky top-8">
+        <div className="desktop-card space-y-6">
+          <div className="desktop-card bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6 sticky top-8">
             <h2 className="text-2xl font-bold text-gray-900 leading-tight">Record Credit Payment</h2>
             
-            <div className="space-y-4">
+            <div className="desktop-form-scroll space-y-4 pr-1 custom-scrollbar">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">Sale Number</label>
                 <input 
@@ -302,6 +303,7 @@ export default function Credits() {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Success Modal */}

@@ -165,7 +165,7 @@ export default function Customers() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="route-workspace space-y-8">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -174,7 +174,7 @@ export default function Customers() {
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
         type={confirmConfig.type}
       />
-      <div className="flex justify-between items-center">
+      <div className="route-header flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Customers</h1>
           <p className="text-gray-500 mt-1">Manage customer profiles and contact information.</p>
@@ -188,7 +188,8 @@ export default function Customers() {
         </button>
       </div>
 
-      <div className="bg-white p-8 rounded-4xl shadow-sm border border-gray-100">
+      <div className="route-body">
+      <div className="desktop-card bg-white p-8 rounded-4xl shadow-sm border border-gray-100">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="relative w-full md:w-96">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -202,7 +203,7 @@ export default function Customers() {
           </div>
         </div>
 
-        <div className="overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
+        <div className="desktop-table-scroll overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
           <table className="w-full text-left">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="text-gray-400 text-[10px] uppercase tracking-widest font-bold border-b border-gray-50">
@@ -302,6 +303,7 @@ export default function Customers() {
             </tbody>
           </table>
         </div>
+      </div>
       </div>
 
       {isModalOpen && (

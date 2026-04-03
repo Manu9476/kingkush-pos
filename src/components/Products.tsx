@@ -321,7 +321,7 @@ export default function Products() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="route-workspace space-y-8">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -331,14 +331,15 @@ export default function Products() {
         type={confirmConfig.type}
       />
       {/* Header */}
-      <div>
+      <div className="route-header">
         <h1 className="text-3xl font-bold text-gray-900">Products</h1>
         <p className="text-gray-500 mt-1">Manage catalog records, prices, stock units, and barcode identifiers.</p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+      <div className="route-body">
+      <div className="route-grid grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
         {/* Add Product Form */}
-        <div className="xl:col-span-5 bg-white p-8 rounded-4xl shadow-sm border border-gray-100">
+        <div className="xl:col-span-5 desktop-card bg-white p-8 rounded-4xl shadow-sm border border-gray-100">
           <div className="flex justify-between items-start mb-8">
             <h2 className="text-2xl font-bold text-gray-900">
               {editingProduct ? 'Edit Product' : 'Add Product'}
@@ -356,7 +357,7 @@ export default function Products() {
             Use existing manufacturer barcode when available. Generate only if product has no barcode.
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="desktop-form-scroll space-y-6 pr-1 custom-scrollbar">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Name</label>
@@ -518,7 +519,7 @@ export default function Products() {
         </div>
 
         {/* Product List */}
-        <div className="xl:col-span-7 bg-white p-8 rounded-4xl shadow-sm border border-gray-100">
+        <div className="xl:col-span-7 desktop-card bg-white p-8 rounded-4xl shadow-sm border border-gray-100">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <h2 className="text-2xl font-bold text-gray-900">Product List</h2>
             <div className="relative w-full md:w-64">
@@ -533,7 +534,7 @@ export default function Products() {
             </div>
           </div>
 
-          <div className="overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="desktop-table-scroll overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
             <table className="w-full text-left">
               <thead className="sticky top-0 bg-white z-10 shadow-sm text-gray-500 text-[10px] uppercase tracking-widest font-bold">
                 <tr className="bg-gray-50/50">
@@ -608,6 +609,7 @@ export default function Products() {
             </table>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

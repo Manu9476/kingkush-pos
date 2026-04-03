@@ -192,7 +192,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const filteredNav = APP_MODULES.filter((item) => userHasAnyPermission(user, item.permissions));
 
   return (
-    <div className="app-shell min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    <div className="app-shell min-h-screen bg-gray-50 flex flex-col md:h-screen md:flex-row md:overflow-hidden">
       {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-56 bg-indigo-900 text-white transform transition-transform duration-300 ease-in-out
@@ -242,7 +242,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="sticky top-0 z-40 h-16 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 md:px-8">
+        <header className="sticky top-0 z-40 h-16 shrink-0 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 md:px-8">
           <div className="flex items-center gap-3">
             <span className="font-black text-indigo-900 text-lg md:hidden">KingKush Sale</span>
             <div className="hidden md:block">
@@ -264,8 +264,10 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          {children}
+        <div className="app-content flex-1 min-h-0 overflow-hidden p-4 md:p-6 lg:p-8">
+          <div className="route-host h-full min-h-0">
+            {children}
+          </div>
         </div>
       </main>
     </div>

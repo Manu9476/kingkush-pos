@@ -88,6 +88,82 @@
 }
 
 @layer components {
+  @media (min-width: 1024px) {
+    .app-shell {
+      height: 100vh;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-shell .app-content,
+    .app-shell .route-host {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .app-shell .route-workspace {
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      overflow: auto;
+    }
+
+    .app-shell .route-workspace.space-y-8 > :not([hidden]) ~ :not([hidden]),
+    .app-shell .route-workspace.space-y-6 > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 0 !important;
+    }
+
+    .app-shell .route-header {
+      flex: 0 0 auto;
+    }
+
+    .app-shell .route-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      overflow: hidden;
+    }
+
+    .app-shell .route-body > *,
+    .app-shell .route-grid > * {
+      min-height: 0;
+    }
+
+    .app-shell .route-grid {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .app-shell .desktop-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .app-shell .desktop-scroll,
+    .app-shell .desktop-form-scroll,
+    .app-shell .desktop-list-scroll,
+    .app-shell .desktop-table-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+
+    .app-shell .desktop-scroll {
+      overflow: auto;
+    }
+
+    .app-shell .desktop-form-scroll,
+    .app-shell .desktop-list-scroll,
+    .app-shell .desktop-table-scroll {
+      overflow-y: auto;
+    }
+  }
+
   .app-shell .max-w-7xl,
   .app-shell .max-w-6xl,
   .app-shell .max-w-5xl {

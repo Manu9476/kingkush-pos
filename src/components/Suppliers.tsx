@@ -103,7 +103,7 @@ export default function Suppliers() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="route-workspace space-y-8">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -112,7 +112,7 @@ export default function Suppliers() {
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
         type={confirmConfig.type}
       />
-      <div className="flex justify-between items-center">
+      <div className="route-header flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Suppliers</h1>
           <p className="text-gray-500">Manage your supermarket's supply chain.</p>
@@ -126,6 +126,7 @@ export default function Suppliers() {
         </button>
       </div>
 
+      <div className="route-body desktop-scroll pr-1 custom-scrollbar">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {suppliers.map(sup => (
           <div key={sup.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 group hover:border-indigo-200 transition-all">
@@ -172,6 +173,7 @@ export default function Suppliers() {
             </div>
           </div>
         ))}
+      </div>
       </div>
 
       {/* Supplier History Modal */}

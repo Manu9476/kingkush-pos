@@ -240,7 +240,7 @@ export default function SalesHistory() {
   const refundReceiptIdentity = getReceiptIdentity(settings, refundReceiptBranch);
 
   return (
-    <div className="space-y-6">
+    <div className="route-workspace space-y-6">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -249,20 +249,21 @@ export default function SalesHistory() {
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
         type={confirmConfig.type}
       />
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="route-header flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Sales History & Refunds</h1>
           <p className="text-gray-500 font-medium">View past transactions and process returns</p>
         </div>
       </div>
 
+      <div className="route-body desktop-scroll pr-1 custom-scrollbar">
       {historyError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           {historyError}
         </div>
       )}
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="desktop-card bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -275,7 +276,7 @@ export default function SalesHistory() {
             />
           </div>
         </div>
-        <div className="overflow-x-auto max-h-137.5 overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
+        <div className="desktop-table-scroll overflow-x-auto max-h-137.5 overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="bg-white">
@@ -340,6 +341,7 @@ export default function SalesHistory() {
             </tbody>
           </table>
         </div>
+      </div>
       </div>
 
       {/* Sale Details Modal */}

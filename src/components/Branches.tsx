@@ -155,7 +155,7 @@ export default function Branches() {
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
+    <div className="route-workspace space-y-8 max-w-7xl mx-auto">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -165,11 +165,12 @@ export default function Branches() {
         type={confirmConfig.type}
       />
 
-      <div className="flex flex-col gap-2">
+      <div className="route-header flex flex-col gap-2">
         <h1 className="text-3xl font-bold text-gray-900">Branches</h1>
         <p className="text-sm text-gray-500">Set up branch locations, contact details, and which branches are active for operations.</p>
       </div>
 
+      <div className="route-body desktop-scroll pr-1 custom-scrollbar">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-400">Total Branches</p>
@@ -187,8 +188,8 @@ export default function Branches() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-8">
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-6">
+        <div className="desktop-card bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-8 py-6 border-b border-gray-50">
             <div>
               <h2 className="text-xl font-bold text-gray-900">{editingBranch ? 'Edit Branch' : 'New Branch'}</h2>
@@ -204,7 +205,7 @@ export default function Branches() {
             )}
           </div>
 
-          <form onSubmit={handleSubmit} className="p-8 space-y-5">
+          <form onSubmit={handleSubmit} className="desktop-form-scroll p-8 space-y-5 custom-scrollbar">
             <div className="grid grid-cols-2 gap-4">
               <label className="space-y-2">
                 <span className="text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Branch Code</span>
@@ -280,13 +281,13 @@ export default function Branches() {
           </form>
         </div>
 
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="desktop-card bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-8 py-6 border-b border-gray-50">
             <h2 className="text-xl font-bold text-gray-900">Branch Directory</h2>
             <p className="text-sm text-gray-500">Review all active outlets and make sure every cashier is attached to the right branch.</p>
           </div>
 
-          <div className="divide-y divide-gray-50 max-h-[680px] overflow-y-auto">
+          <div className="desktop-list-scroll divide-y divide-gray-50 max-h-[680px] overflow-y-auto">
             {branches.map((branch) => {
               const isDefault = branch.id === defaultBranchId;
               return (
@@ -366,6 +367,7 @@ export default function Branches() {
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

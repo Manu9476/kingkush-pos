@@ -210,7 +210,7 @@ export default function Expenses() {
   const expenseReceiptIdentity = getReceiptIdentity(settings, expenseReceiptBranch);
 
   return (
-    <div className="p-6 space-y-8 max-w-7xl mx-auto">
+    <div className="route-workspace p-6 space-y-8 max-w-7xl mx-auto">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -220,7 +220,7 @@ export default function Expenses() {
         type={confirmConfig.type}
       />
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="route-header flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">SHOP EXPENSES</h1>
           <p className="text-gray-500 font-medium">Track and monitor all shop expenditures</p>
@@ -243,6 +243,7 @@ export default function Expenses() {
         </div>
       </div>
 
+      <div className="route-body desktop-scroll pr-1 custom-scrollbar">
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-4xl border border-gray-100 shadow-sm flex items-center gap-4">
@@ -312,8 +313,8 @@ export default function Expenses() {
       </div>
 
       {/* Expenses Table */}
-      <div className="bg-white rounded-4xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
+      <div className="desktop-card bg-white rounded-4xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="desktop-table-scroll overflow-x-auto max-h-150 overflow-y-auto pr-2 custom-scrollbar">
           <table className="w-full">
             <thead className="sticky top-0 bg-white z-10 shadow-sm">
               <tr className="text-left border-b border-gray-50">
@@ -372,6 +373,7 @@ export default function Expenses() {
             </tbody>
           </table>
         </div>
+      </div>
       </div>
 
       {/* Add Expense Modal */}
