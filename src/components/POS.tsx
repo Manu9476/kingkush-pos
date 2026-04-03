@@ -21,7 +21,13 @@ import ConfirmDialog from './ConfirmDialog';
 
 import { isCashDrawerEnabled, saleUsesCashDrawer, triggerCashDrawer } from '../services/cashDrawer';
 import { createSale, getShiftStatus } from '../services/platformApi';
-import { formatSaleReceiptNumber, getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
+import {
+  formatSaleReceiptNumber,
+  getReceiptAppearance,
+  getReceiptContainerStyle,
+  getReceiptIdentity,
+  resolveReceiptBranch
+} from '../utils/receipts';
 
 export default function POS() {
   const { user } = useAuth();
@@ -431,6 +437,7 @@ export default function POS() {
     currentShift?.branchId || settings?.defaultBranchId
   );
   const receiptIdentity = getReceiptIdentity(settings, receiptBranch);
+  const receiptAppearance = getReceiptAppearance(settings);
   const receiptPaymentLabel = (sale: Sale) => {
     const hasCreditBalance = Boolean(sale.isCredit || (sale.outstandingBalance || 0) > 0);
     if (hasCreditBalance && sale.amountPaid > 0 && sale.tenderMethod && sale.tenderMethod !== 'credit') {
@@ -1003,12 +1010,17 @@ export default function POS() {
               </div>
 
                 {/* Receipt Preview */}
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 font-mono text-[10px] space-y-2 max-w-75 mx-auto shadow-inner">
+                <div
+                  className="bg-gray-50 p-4 rounded-xl border border-gray-100 font-mono space-y-2 max-w-75 mx-auto shadow-inner"
+                  style={getReceiptContainerStyle(settings)}
+                >
                   <div className="text-center border-b border-dashed border-gray-300 pb-2 mb-2">
+                  <p className="font-bold uppercase" style={{ color: receiptAppearance.brandColor }}>{receiptAppearance.saleTitle}</p>
                   <h4 className="font-bold text-sm uppercase">{receiptIdentity.businessName}</h4>
-                  {receiptIdentity.branchName && <p>{receiptIdentity.branchName}</p>}
-                  {receiptIdentity.address && <p>{receiptIdentity.address}</p>}
-                  {receiptIdentity.phone && <p>Tel: {receiptIdentity.phone}</p>}
+                  {receiptAppearance.showBranchName && receiptIdentity.branchName && <p>{receiptIdentity.branchName}</p>}
+                  {receiptAppearance.showAddress && receiptIdentity.address && <p>{receiptIdentity.address}</p>}
+                  {receiptAppearance.showPhone && receiptIdentity.phone && <p>Tel: {receiptIdentity.phone}</p>}
+                  {receiptAppearance.showEmail && receiptIdentity.email && <p>{receiptIdentity.email}</p>}
                   </div>
                 
                 <div className="flex justify-between">
@@ -1017,8 +1029,9 @@ export default function POS() {
                 </div>
                 <p>Receipt #: {formatSaleReceiptNumber(lastSale.id)}</p>
                 {lastSale.shiftId && <p>Shift: {lastSale.shiftId.slice(-6).toUpperCase()}</p>}
-                <p>Cashier: {lastSale.cashierName}</p>
-                {lastSale.customerName && <p>Customer: {lastSale.customerName}</p>}
+                {receiptAppearance.showCashier && <p>Cashier: {lastSale.cashierName}</p>}
+                {receiptAppearance.showCustomer && lastSale.customerName && <p>Customer: {lastSale.customerName}</p>}
+                {receiptAppearance.showReference && lastSale.reference && <p>Reference: {lastSale.reference}</p>}
                 
                 <div className="border-y border-dashed border-gray-300 py-2 my-2">
                   <div className="flex justify-between font-bold mb-1">
@@ -1040,10 +1053,12 @@ export default function POS() {
                     <span>SUBTOTAL</span>
                     <span>KES {lastSale.totalAmount.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>VAT ({settings?.taxRate || 0}%)</span>
-                    <span>KES {(lastSale.taxAmount || 0).toLocaleString()}</span>
-                  </div>
+                  {receiptAppearance.showTaxLine && (
+                    <div className="flex justify-between">
+                      <span>VAT ({settings?.taxRate || 0}%)</span>
+                      <span>KES {(lastSale.taxAmount || 0).toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between font-bold text-xs border-t border-dashed border-gray-300 pt-1">
                     <span>TOTAL</span>
                     <span>KES {lastSale.totalAmount.toLocaleString()}</span>
@@ -1062,7 +1077,7 @@ export default function POS() {
                       <span>KES {(lastSale.outstandingBalance || 0).toLocaleString()}</span>
                     </div>
                   )}
-                  {settings?.loyaltyPointRate && (
+                  {receiptAppearance.showLoyaltySummary && settings?.loyaltyPointRate && (
                     <div className="flex justify-between text-indigo-600 border-t border-dashed border-gray-300 pt-1 mt-1">
                       <span>POINTS EARNED</span>
                       <span>{Math.floor(lastSale.totalAmount / settings.loyaltyPointRate)}</span>
@@ -1077,8 +1092,8 @@ export default function POS() {
                 </div>
 
                 <div className="text-center border-t border-dashed border-gray-300 pt-2 mt-4">
-                  <p className="font-bold text-xs mb-1 uppercase">{receiptIdentity.header}</p>
-                  <p>{receiptIdentity.footer}</p>
+                  {receiptAppearance.showHeader && <p className="font-bold text-xs mb-1 uppercase">{receiptIdentity.header}</p>}
+                  {receiptAppearance.showFooter && <p>{receiptIdentity.footer}</p>}
                 </div>
               </div>
 
@@ -1112,12 +1127,14 @@ export default function POS() {
 
       {/* Hidden Thermal Receipt for Printing */}
       {showReceipt && lastSale && (
-        <div id="thermal-receipt" className="hidden print:block font-mono text-[12px] leading-tight p-4 w-[80mm]">
+        <div id="thermal-receipt" className="hidden print:block font-mono leading-tight p-4" style={getReceiptContainerStyle(settings)}>
           <div className="text-center mb-4">
+            <p className="font-bold mb-1 uppercase" style={{ color: receiptAppearance.brandColor }}>{receiptAppearance.saleTitle}</p>
             <h1 className="font-bold text-lg uppercase">{receiptIdentity.businessName}</h1>
-            {receiptIdentity.branchName && <p>{receiptIdentity.branchName}</p>}
-            {receiptIdentity.address && <p>{receiptIdentity.address}</p>}
-            {receiptIdentity.phone && <p>Tel: {receiptIdentity.phone}</p>}
+            {receiptAppearance.showBranchName && receiptIdentity.branchName && <p>{receiptIdentity.branchName}</p>}
+            {receiptAppearance.showAddress && receiptIdentity.address && <p>{receiptIdentity.address}</p>}
+            {receiptAppearance.showPhone && receiptIdentity.phone && <p>Tel: {receiptIdentity.phone}</p>}
+            {receiptAppearance.showEmail && receiptIdentity.email && <p>{receiptIdentity.email}</p>}
             <p className="mt-2">********************************</p>
           </div>
           
@@ -1128,8 +1145,9 @@ export default function POS() {
             </div>
             <p>RECEIPT #: {formatSaleReceiptNumber(lastSale.id)}</p>
             {lastSale.shiftId && <p>SHIFT: {lastSale.shiftId.toUpperCase()}</p>}
-            <p>CASHIER: {lastSale.cashierName.toUpperCase()}</p>
-            {lastSale.customerName && <p>CUSTOMER: {lastSale.customerName.toUpperCase()}</p>}
+            {receiptAppearance.showCashier && <p>CASHIER: {lastSale.cashierName.toUpperCase()}</p>}
+            {receiptAppearance.showCustomer && lastSale.customerName && <p>CUSTOMER: {lastSale.customerName.toUpperCase()}</p>}
+            {receiptAppearance.showReference && lastSale.reference && <p>REFERENCE: {lastSale.reference.toUpperCase()}</p>}
             <p>********************************</p>
           </div>
 
@@ -1156,10 +1174,12 @@ export default function POS() {
               <span>SUBTOTAL</span>
               <span>KES {lastSale.totalAmount.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between">
-              <span>VAT ({settings?.taxRate || 0}%)</span>
-              <span>KES {(lastSale.taxAmount || 0).toLocaleString()}</span>
-            </div>
+            {receiptAppearance.showTaxLine && (
+              <div className="flex justify-between">
+                <span>VAT ({settings?.taxRate || 0}%)</span>
+                <span>KES {(lastSale.taxAmount || 0).toLocaleString()}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold text-base border-t border-dashed border-gray-300 pt-1 mt-1">
               <span>TOTAL AMOUNT</span>
               <span>KES {lastSale.totalAmount.toLocaleString()}</span>
@@ -1187,8 +1207,8 @@ export default function POS() {
           </div>
 
           <div className="text-center">
-            <p className="font-bold mb-1 uppercase">{receiptIdentity.header}</p>
-            <p>{receiptIdentity.footer}</p>
+            {receiptAppearance.showHeader && <p className="font-bold mb-1 uppercase">{receiptIdentity.header}</p>}
+            {receiptAppearance.showFooter && <p>{receiptIdentity.footer}</p>}
             <p className="mt-2">********************************</p>
           </div>
         </div>

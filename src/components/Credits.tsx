@@ -13,7 +13,13 @@ import {
 } from '../data';
 import { Branch, Credit, CreditPayment, SystemSettings } from '../types';
 import { recordCreditPayment } from '../services/platformApi';
-import { formatCreditReceiptNumber, getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
+import {
+  formatCreditReceiptNumber,
+  getReceiptAppearance,
+  getReceiptContainerStyle,
+  getReceiptIdentity,
+  resolveReceiptBranch
+} from '../utils/receipts';
 
 export default function Credits() {
   const [credits, setCredits] = useState<Credit[]>([]);
@@ -66,6 +72,7 @@ export default function Credits() {
   const totalOutstanding = credits.reduce((sum, c) => sum + c.outstandingBalance, 0);
   const creditReceiptBranch = resolveReceiptBranch(branches, lastPayment?.branchId, settings?.defaultBranchId);
   const creditReceiptIdentity = getReceiptIdentity(settings, creditReceiptBranch);
+  const creditReceiptAppearance = getReceiptAppearance(settings);
 
   const handleSettle = (credit: Credit) => {
     setSelectedCredit(credit);
@@ -344,12 +351,14 @@ export default function Credits() {
 
       {/* Hidden Print Receipt */}
       {lastPayment && (
-        <div id="credit-receipt" className="hidden print:block font-mono text-[12px] leading-tight">
+        <div id="credit-receipt" className="hidden print:block font-mono leading-tight" style={getReceiptContainerStyle(settings)}>
           <div className="text-center mb-6">
+            <p className="font-bold mb-1 uppercase" style={{ color: creditReceiptAppearance.brandColor }}>{creditReceiptAppearance.creditTitle}</p>
             <h1 className="font-bold text-lg uppercase">{creditReceiptIdentity.businessName}</h1>
-            {creditReceiptIdentity.branchName && <p className="text-sm">{creditReceiptIdentity.branchName}</p>}
-            {creditReceiptIdentity.address && <p className="text-sm">{creditReceiptIdentity.address}</p>}
-            {creditReceiptIdentity.phone && <p className="text-sm">Tel: {creditReceiptIdentity.phone}</p>}
+            {creditReceiptAppearance.showBranchName && creditReceiptIdentity.branchName && <p className="text-sm">{creditReceiptIdentity.branchName}</p>}
+            {creditReceiptAppearance.showAddress && creditReceiptIdentity.address && <p className="text-sm">{creditReceiptIdentity.address}</p>}
+            {creditReceiptAppearance.showPhone && creditReceiptIdentity.phone && <p className="text-sm">Tel: {creditReceiptIdentity.phone}</p>}
+            {creditReceiptAppearance.showEmail && creditReceiptIdentity.email && <p className="text-sm">{creditReceiptIdentity.email}</p>}
             <p className="mt-2">********************************</p>
           </div>
           
@@ -400,9 +409,11 @@ export default function Credits() {
           </div>
 
           <div className="space-y-6 mt-12">
-            <div className="border-t border-gray-300 pt-1">
-              <p className="text-[10px] uppercase tracking-widest text-center">Served By: {lastPayment.cashierName}</p>
-            </div>
+            {creditReceiptAppearance.showCashier && (
+              <div className="border-t border-gray-300 pt-1">
+                <p className="text-[10px] uppercase tracking-widest text-center">Served By: {lastPayment.cashierName}</p>
+              </div>
+            )}
             <div className="border-t border-gray-300 pt-4 mt-8">
               <p className="text-[10px] uppercase tracking-widest text-center">Customer Signature</p>
             </div>
@@ -410,9 +421,9 @@ export default function Credits() {
 
           <div className="text-center mt-12 text-[10px]">
             <p>********************************</p>
-            <p className="font-bold mb-1 uppercase">{creditReceiptIdentity.header}</p>
+            {creditReceiptAppearance.showHeader && <p className="font-bold mb-1 uppercase">{creditReceiptIdentity.header}</p>}
             <p>THANK YOU FOR YOUR PAYMENT</p>
-            <p>{creditReceiptIdentity.footer}</p>
+            {creditReceiptAppearance.showFooter && <p>{creditReceiptIdentity.footer}</p>}
           </div>
         </div>
       )}

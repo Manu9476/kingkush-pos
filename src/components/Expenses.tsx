@@ -32,7 +32,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 import { createExpense } from '../services/platformApi';
-import { getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
+import { getReceiptAppearance, getReceiptContainerStyle, getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
 
 const PAYMENT_METHODS = ['cash', 'mpesa', 'bank', 'other'] as const;
 
@@ -208,6 +208,7 @@ export default function Expenses() {
   const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
   const expenseReceiptBranch = resolveReceiptBranch(branches, selectedExpense?.branchId, settings?.defaultBranchId);
   const expenseReceiptIdentity = getReceiptIdentity(settings, expenseReceiptBranch);
+  const expenseReceiptAppearance = getReceiptAppearance(settings);
 
   return (
     <div className="route-workspace p-6 space-y-8 max-w-7xl mx-auto">
@@ -580,12 +581,14 @@ export default function Expenses() {
 
       {/* Hidden Print Voucher */}
       {selectedExpense && (
-        <div id="expense-voucher" className="hidden print:block font-mono text-[12px] leading-tight">
+        <div id="expense-voucher" className="hidden print:block font-mono leading-tight" style={getReceiptContainerStyle(settings)}>
           <div className="text-center mb-6">
+            <p className="font-bold mb-1 uppercase" style={{ color: expenseReceiptAppearance.brandColor }}>{expenseReceiptAppearance.expenseTitle}</p>
             <h1 className="font-bold text-lg uppercase">{expenseReceiptIdentity.businessName}</h1>
-            {expenseReceiptIdentity.branchName && <p className="text-sm">{expenseReceiptIdentity.branchName}</p>}
-            {expenseReceiptIdentity.address && <p className="text-sm">{expenseReceiptIdentity.address}</p>}
-            {expenseReceiptIdentity.phone && <p className="text-sm">Tel: {expenseReceiptIdentity.phone}</p>}
+            {expenseReceiptAppearance.showBranchName && expenseReceiptIdentity.branchName && <p className="text-sm">{expenseReceiptIdentity.branchName}</p>}
+            {expenseReceiptAppearance.showAddress && expenseReceiptIdentity.address && <p className="text-sm">{expenseReceiptIdentity.address}</p>}
+            {expenseReceiptAppearance.showPhone && expenseReceiptIdentity.phone && <p className="text-sm">Tel: {expenseReceiptIdentity.phone}</p>}
+            {expenseReceiptAppearance.showEmail && expenseReceiptIdentity.email && <p className="text-sm">{expenseReceiptIdentity.email}</p>}
             <p className="mt-2">********************************</p>
           </div>
           
@@ -641,9 +644,9 @@ export default function Expenses() {
 
           <div className="text-center mt-12 text-[10px]">
             <p>********************************</p>
-            <p className="font-bold mb-1 uppercase">{expenseReceiptIdentity.header}</p>
+            {expenseReceiptAppearance.showHeader && <p className="font-bold mb-1 uppercase">{expenseReceiptIdentity.header}</p>}
             <p>INTERNAL SHOP DOCUMENT</p>
-            <p>{expenseReceiptIdentity.footer}</p>
+            {expenseReceiptAppearance.showFooter && <p>{expenseReceiptIdentity.footer}</p>}
           </div>
         </div>
       )}

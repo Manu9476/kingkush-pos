@@ -6,11 +6,13 @@ import {
   query,
   orderBy,
   where,
+  doc,
+  getDoc,
   toDate,
   handleFirestoreError,
   OperationType
 } from '../data';
-import type { Branch, CashMovement, CashShift } from '../types';
+import type { Branch, CashMovement, CashShift, SystemSettings } from '../types';
 import {
   closeShift,
   getShiftReport,
@@ -21,7 +23,13 @@ import {
 import { Banknote, Clock3, LockOpen, Lock, ArrowDownUp, ShieldCheck, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../App';
-import { formatShiftReportNumber } from '../utils/receipts';
+import {
+  formatShiftReportNumber,
+  getReceiptAppearance,
+  getReceiptContainerStyle,
+  getReceiptIdentity,
+  resolveReceiptBranch
+} from '../utils/receipts';
 
 type LiveShiftSummary = {
   shiftId: string;
@@ -100,6 +108,7 @@ function formatMoneyInput(amount: number) {
 export default function CashShifts() {
   const { user } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [recentShifts, setRecentShifts] = useState<CashShift[]>([]);
   const [currentShift, setCurrentShift] = useState<CashShift | null>(null);
   const [liveSummary, setLiveSummary] = useState<LiveShiftSummary>(null);
@@ -198,6 +207,21 @@ export default function CashShifts() {
       (error) => handleFirestoreError(error, OperationType.LIST, 'cash_shifts')
     );
 
+    const fetchSettings = async () => {
+      try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'system'));
+        if (settingsDoc.exists()) {
+          setSettings(settingsDoc.data() as SystemSettings);
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to load shift receipt settings', error);
+        }
+      }
+    };
+
+    void fetchSettings();
+
     return () => {
       unsubBranches();
       unsubShifts();
@@ -227,6 +251,9 @@ export default function CashShifts() {
     }
     return branches.find((branch) => branch.id === currentShift.branchId)?.name || currentShift.branchId;
   }, [branches, currentShift?.branchId]);
+  const shiftReceiptBranch = resolveReceiptBranch(branches, selectedReport?.shift.branchId, settings?.defaultBranchId);
+  const shiftReceiptIdentity = getReceiptIdentity(settings, shiftReceiptBranch);
+  const shiftReceiptAppearance = getReceiptAppearance(settings);
 
   const handleLoadReport = async (shiftId: string, printAfterLoad = false) => {
     setIsLoadingReport(true);
@@ -821,11 +848,14 @@ export default function CashShifts() {
       </div>
 
       {selectedReport && (
-        <div id="cash-shift-receipt" className="hidden print:block font-mono text-[12px] leading-tight p-4 w-[80mm]">
+        <div id="cash-shift-receipt" className="hidden print:block font-mono leading-tight p-4" style={getReceiptContainerStyle(settings)}>
           <div className="text-center mb-4">
-            <h1 className="font-bold text-lg uppercase">KingKush Sale</h1>
-            <p className="text-sm font-bold">CASH SHIFT REPORT</p>
-            <p>{selectedReport.shift.branchName || 'Unassigned branch'}</p>
+            <p className="font-bold mb-1 uppercase" style={{ color: shiftReceiptAppearance.brandColor }}>{shiftReceiptAppearance.shiftTitle}</p>
+            <h1 className="font-bold text-lg uppercase">{shiftReceiptIdentity.businessName}</h1>
+            {shiftReceiptAppearance.showBranchName && <p>{selectedReport.shift.branchName || shiftReceiptIdentity.branchName || 'Unassigned branch'}</p>}
+            {shiftReceiptAppearance.showAddress && shiftReceiptIdentity.address && <p>{shiftReceiptIdentity.address}</p>}
+            {shiftReceiptAppearance.showPhone && shiftReceiptIdentity.phone && <p>Tel: {shiftReceiptIdentity.phone}</p>}
+            {shiftReceiptAppearance.showEmail && shiftReceiptIdentity.email && <p>{shiftReceiptIdentity.email}</p>}
             <p className="mt-1">Report #: {formatShiftReportNumber(selectedReport.shift.id)}</p>
             <p className="mt-2">********************************</p>
           </div>
@@ -885,8 +915,10 @@ export default function CashShifts() {
           )}
 
           <div className="text-center">
+            {shiftReceiptAppearance.showHeader && <p className="font-bold mb-1 uppercase">{shiftReceiptIdentity.header}</p>}
             <p className="font-bold mb-1 uppercase">Shift report generated successfully</p>
             <p>Prepared for reconciliation and audit review.</p>
+            {shiftReceiptAppearance.showFooter && <p className="mt-1">{shiftReceiptIdentity.footer}</p>}
           </div>
         </div>
       )}

@@ -42,7 +42,7 @@ import {
 import ReadinessPanel from './ReadinessPanel';
 import { useAuth } from '../App';
 import { motion, AnimatePresence } from 'motion/react';
-import { getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
+import { getReceiptAppearance, getReceiptContainerStyle, getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
 
 interface DashboardReceipt {
   id: string;
@@ -220,6 +220,7 @@ export default function Dashboard() {
     settings?.defaultBranchId
   );
   const previewReceiptIdentity = getReceiptIdentity(settings, previewBranch);
+  const previewReceiptAppearance = getReceiptAppearance(settings);
 
   const handlePrintReceipt = async (receipt: DashboardReceipt) => {
     setIsPrinting(true);
@@ -520,12 +521,16 @@ export default function Dashboard() {
               </div>
 
               <div className="p-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                <div className="bg-gray-50 p-6 rounded-2xl border border-dashed border-gray-200 font-mono text-sm space-y-4">
+                <div className="bg-gray-50 p-6 rounded-2xl border border-dashed border-gray-200 font-mono space-y-4" style={getReceiptContainerStyle(settings)}>
                   <div className="text-center space-y-1">
+                    <p className="font-bold uppercase" style={{ color: previewReceiptAppearance.brandColor }}>
+                      {selectedCreditPayment ? previewReceiptAppearance.creditTitle : previewReceiptAppearance.saleTitle}
+                    </p>
                     <h4 className="font-black text-base uppercase">{previewReceiptIdentity.businessName}</h4>
-                    {previewReceiptIdentity.branchName && <p className="text-xs text-gray-500">{previewReceiptIdentity.branchName}</p>}
-                    {previewReceiptIdentity.address && <p className="text-xs text-gray-500">{previewReceiptIdentity.address}</p>}
-                    {previewReceiptIdentity.phone && <p className="text-xs text-gray-500">Tel: {previewReceiptIdentity.phone}</p>}
+                    {previewReceiptAppearance.showBranchName && previewReceiptIdentity.branchName && <p className="text-xs text-gray-500">{previewReceiptIdentity.branchName}</p>}
+                    {previewReceiptAppearance.showAddress && previewReceiptIdentity.address && <p className="text-xs text-gray-500">{previewReceiptIdentity.address}</p>}
+                    {previewReceiptAppearance.showPhone && previewReceiptIdentity.phone && <p className="text-xs text-gray-500">Tel: {previewReceiptIdentity.phone}</p>}
+                    {previewReceiptAppearance.showEmail && previewReceiptIdentity.email && <p className="text-xs text-gray-500">{previewReceiptIdentity.email}</p>}
                   </div>
 
                   <div className="border-t border-dashed border-gray-200 pt-4 space-y-1 text-xs">
@@ -541,15 +546,17 @@ export default function Dashboard() {
                       <span>Receipt #:</span>
                       <span className="font-bold">{(selectedSale?.id || selectedCreditPayment?.id)?.toUpperCase()}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Cashier:</span>
-                      <span>{(selectedSale?.cashierName || selectedCreditPayment?.cashierName)?.toUpperCase()}</span>
-                    </div>
-                    {(selectedSale?.customerName || selectedCreditPayment?.creditId) && (
+                    {previewReceiptAppearance.showCashier && (
+                      <div className="flex justify-between">
+                        <span>Cashier:</span>
+                        <span>{(selectedSale?.cashierName || selectedCreditPayment?.cashierName)?.toUpperCase()}</span>
+                      </div>
+                    )}
+                    {previewReceiptAppearance.showCustomer && (selectedSale?.customerName || selectedCreditPayment?.creditId) && (
                       <div className="flex justify-between">
                         <span>Customer:</span>
                         <span>{
-                          selectedSale?.customerName || 
+                          selectedSale?.customerName ||
                           credits.find(c => c.id === selectedCreditPayment?.creditId)?.customerName
                         }</span>
                       </div>
@@ -616,9 +623,9 @@ export default function Dashboard() {
                   </div>
 
                   <div className="text-center pt-4 text-[10px] text-gray-400">
-                    <p className="font-bold mb-1 uppercase">{previewReceiptIdentity.header}</p>
+                    {previewReceiptAppearance.showHeader && <p className="font-bold mb-1 uppercase">{previewReceiptIdentity.header}</p>}
                     <p>THANK YOU FOR SHOPPING WITH US!</p>
-                    <p className="mt-1">{previewReceiptIdentity.footer}</p>
+                    {previewReceiptAppearance.showFooter && <p className="mt-1">{previewReceiptIdentity.footer}</p>}
                   </div>
                 </div>
               </div>
@@ -647,14 +654,18 @@ export default function Dashboard() {
       </AnimatePresence>
 
       {/* Hidden Thermal Receipt for Printing */}
-      <div id="thermal-receipt" className="hidden print:block font-mono text-[12px] leading-tight p-4 w-[80mm]">
+      <div id="thermal-receipt" className="hidden print:block font-mono leading-tight p-4" style={getReceiptContainerStyle(settings)}>
         {(selectedSale || selectedCreditPayment) && (
           <>
             <div className="text-center mb-4">
+              <p className="font-bold mb-1 uppercase" style={{ color: previewReceiptAppearance.brandColor }}>
+                {selectedCreditPayment ? previewReceiptAppearance.creditTitle : previewReceiptAppearance.saleTitle}
+              </p>
               <h1 className="font-bold text-lg uppercase">{previewReceiptIdentity.businessName}</h1>
-              {previewReceiptIdentity.branchName && <p>{previewReceiptIdentity.branchName}</p>}
-              {previewReceiptIdentity.address && <p>{previewReceiptIdentity.address}</p>}
-              {previewReceiptIdentity.phone && <p>Tel: {previewReceiptIdentity.phone}</p>}
+              {previewReceiptAppearance.showBranchName && previewReceiptIdentity.branchName && <p>{previewReceiptIdentity.branchName}</p>}
+              {previewReceiptAppearance.showAddress && previewReceiptIdentity.address && <p>{previewReceiptIdentity.address}</p>}
+              {previewReceiptAppearance.showPhone && previewReceiptIdentity.phone && <p>Tel: {previewReceiptIdentity.phone}</p>}
+              {previewReceiptAppearance.showEmail && previewReceiptIdentity.email && <p>{previewReceiptIdentity.email}</p>}
               <p className="mt-2">********************************</p>
             </div>
             
@@ -664,8 +675,8 @@ export default function Dashboard() {
                 <span>TIME: {(selectedSale?.timestamp || selectedCreditPayment?.timestamp)?.toDate().toLocaleTimeString()}</span>
               </div>
               <p>RECEIPT #: {(selectedSale?.id || selectedCreditPayment?.id)?.toUpperCase()}</p>
-              <p>CASHIER: {(selectedSale?.cashierName || selectedCreditPayment?.cashierName)?.toUpperCase()}</p>
-              {(selectedSale?.customerName || selectedCreditPayment?.creditId) && (
+              {previewReceiptAppearance.showCashier && <p>CASHIER: {(selectedSale?.cashierName || selectedCreditPayment?.cashierName)?.toUpperCase()}</p>}
+              {previewReceiptAppearance.showCustomer && (selectedSale?.customerName || selectedCreditPayment?.creditId) && (
                 <p>CUSTOMER: {
                   (selectedSale?.customerName || 
                   credits.find(c => c.id === selectedCreditPayment?.creditId)?.customerName || '').toUpperCase()
@@ -738,9 +749,9 @@ export default function Dashboard() {
             </div>
 
             <div className="text-center border-t border-dashed border-gray-300 pt-4 mt-4">
-              <p className="font-bold mb-1 uppercase">{previewReceiptIdentity.header}</p>
+              {previewReceiptAppearance.showHeader && <p className="font-bold mb-1 uppercase">{previewReceiptIdentity.header}</p>}
               <p>THANK YOU FOR SHOPPING WITH US!</p>
-              <p>{previewReceiptIdentity.footer}</p>
+              {previewReceiptAppearance.showFooter && <p>{previewReceiptIdentity.footer}</p>}
             </div>
           </>
         )}

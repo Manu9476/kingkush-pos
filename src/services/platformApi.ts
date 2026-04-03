@@ -5,6 +5,54 @@ const PROTECTED_PREVIEW_MESSAGE =
 const UNEXPECTED_HTML_MESSAGE =
   'The server returned an unexpected page instead of API data. Please refresh and try again.';
 
+export type SystemIssueReport = {
+  id: string;
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  summary: string;
+  fix: string;
+  route?: string;
+  file?: string;
+};
+
+export type SystemComponentCatalogEntry = {
+  id: string;
+  label: string;
+  route: string;
+  permission: string;
+  file: string;
+  functionality: string;
+};
+
+export type SystemHistoryScope = {
+  id: 'sales' | 'cash-shifts' | 'inventory' | 'expenses' | 'audit' | 'purchase-orders' | 'label-history';
+  label: string;
+  description: string;
+  warning: string;
+  recordCount: number;
+};
+
+export type SystemStatusReport = {
+  generatedAt: string;
+  services: Array<{
+    id: string;
+    label: string;
+    status: 'ok' | 'warning' | 'error';
+    message: string;
+  }>;
+  counts: Record<string, number>;
+  issues: SystemIssueReport[];
+  components: SystemComponentCatalogEntry[];
+  historyScopes: SystemHistoryScope[];
+  receiptAppearance: {
+    brandColor: string;
+    paperWidthMm: number;
+    fontSizePx: number;
+    header: string;
+    footer: string;
+  };
+};
+
 function emitDataMutation(url: string, method: string) {
   if (typeof window === 'undefined') {
     return;
@@ -308,6 +356,26 @@ export async function changePassword(input: {
     method: 'POST',
     body: JSON.stringify(input)
   }, { mutatesData: true });
+}
+
+export async function getSystemStatusReport() {
+  return requestJson<SystemStatusReport>('/api/admin/system', {
+    method: 'GET',
+    headers: {}
+  });
+}
+
+export async function purgeSystemHistory(input: {
+  scope: 'sales' | 'cash-shifts' | 'inventory' | 'expenses' | 'audit' | 'purchase-orders' | 'label-history' | 'all';
+}) {
+  return requestJson<{
+    ok: true;
+    scope: string;
+    deleted: Record<string, number>;
+  }>('/api/admin/system', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  }, { mutatesData: true, timeoutMs: 45000 });
 }
 
 export async function getProductMovementReport(input: {

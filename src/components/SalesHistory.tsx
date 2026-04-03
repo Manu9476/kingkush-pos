@@ -22,7 +22,13 @@ import {
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 import { refundSale } from '../services/platformApi';
-import { formatRefundReceiptNumber, getReceiptIdentity, resolveReceiptBranch } from '../utils/receipts';
+import {
+  formatRefundReceiptNumber,
+  getReceiptAppearance,
+  getReceiptContainerStyle,
+  getReceiptIdentity,
+  resolveReceiptBranch
+} from '../utils/receipts';
 import { useAuth } from '../App';
 
 export default function SalesHistory() {
@@ -238,6 +244,7 @@ export default function SalesHistory() {
   );
   const refundReceiptBranch = resolveReceiptBranch(branches, selectedSale?.branchId, settings?.defaultBranchId);
   const refundReceiptIdentity = getReceiptIdentity(settings, refundReceiptBranch);
+  const refundReceiptAppearance = getReceiptAppearance(settings);
 
   return (
     <div className="route-workspace space-y-6">
@@ -489,15 +496,16 @@ export default function SalesHistory() {
       )}
 
       {/* Hidden Refund Receipt for Printing */}
-      <div id="refund-receipt" className="hidden print:block font-mono text-[12px] leading-tight p-4 w-[80mm]">
+      <div id="refund-receipt" className="hidden print:block font-mono leading-tight p-4" style={getReceiptContainerStyle(settings)}>
         {selectedSale && hasRefundActivity && (
           <>
             <div className="text-center mb-4">
+              <p className="font-bold mb-1 uppercase" style={{ color: refundReceiptAppearance.brandColor }}>{refundReceiptAppearance.refundTitle}</p>
               <h1 className="font-bold text-lg uppercase">{refundReceiptIdentity.businessName}</h1>
-              <p className="text-sm font-bold">REFUND RECEIPT</p>
-              {refundReceiptIdentity.branchName && <p>{refundReceiptIdentity.branchName}</p>}
-              {refundReceiptIdentity.address && <p>{refundReceiptIdentity.address}</p>}
-              {refundReceiptIdentity.phone && <p>Tel: {refundReceiptIdentity.phone}</p>}
+              {refundReceiptAppearance.showBranchName && refundReceiptIdentity.branchName && <p>{refundReceiptIdentity.branchName}</p>}
+              {refundReceiptAppearance.showAddress && refundReceiptIdentity.address && <p>{refundReceiptIdentity.address}</p>}
+              {refundReceiptAppearance.showPhone && refundReceiptIdentity.phone && <p>Tel: {refundReceiptIdentity.phone}</p>}
+              {refundReceiptAppearance.showEmail && refundReceiptIdentity.email && <p>{refundReceiptIdentity.email}</p>}
               <p className="mt-2">********************************</p>
             </div>
             
@@ -506,8 +514,9 @@ export default function SalesHistory() {
               <p>TIME: {selectedSale.refundedAt ? new Date(selectedSale.refundedAt).toLocaleTimeString() : toDate(selectedSale.timestamp).toLocaleTimeString()}</p>
               <p>REFUND #: {formatRefundReceiptNumber(selectedSale.id)}</p>
               <p>ORIGINAL SALE: #{selectedSale.id.toUpperCase()}</p>
-              <p>REFUNDED BY: {(selectedSale.refundedBy || 'SYSTEM').toUpperCase()}</p>
-              <p>CUSTOMER: {(selectedSale.customerName || 'Walk-in').toUpperCase()}</p>
+              {refundReceiptAppearance.showCashier && <p>REFUNDED BY: {(selectedSale.refundedBy || 'SYSTEM').toUpperCase()}</p>}
+              {refundReceiptAppearance.showCustomer && <p>CUSTOMER: {(selectedSale.customerName || 'Walk-in').toUpperCase()}</p>}
+              {refundReceiptAppearance.showReference && selectedSale.reference && <p>REFERENCE: {selectedSale.reference.toUpperCase()}</p>}
               <p>STATUS: {selectedSale.isRefunded ? 'FULL REFUND' : 'PARTIAL REFUND'}</p>
               <p>********************************</p>
             </div>
@@ -541,9 +550,9 @@ export default function SalesHistory() {
             </div>
 
             <div className="text-center border-t border-dashed border-gray-300 pt-4 mt-4">
-              <p className="font-bold mb-1 uppercase">{refundReceiptIdentity.header}</p>
+              {refundReceiptAppearance.showHeader && <p className="font-bold mb-1 uppercase">{refundReceiptIdentity.header}</p>}
               <p>REFUND PROCESSED SUCCESSFULLY</p>
-              <p>{refundReceiptIdentity.footer}</p>
+              {refundReceiptAppearance.showFooter && <p>{refundReceiptIdentity.footer}</p>}
             </div>
           </>
         )}

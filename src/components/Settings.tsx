@@ -23,12 +23,25 @@ import {
   EyeOff,
   Store,
   Printer,
-  ScanLine
+  ScanLine,
+  Palette,
+  Trash2
 } from 'lucide-react';
+import { toast } from 'sonner';
 
+import ConfirmDialog from './ConfirmDialog';
 import { recordAuditLog } from '../services/auditService';
 import { testCashDrawer } from '../services/cashDrawer';
-import { changePassword } from '../services/platformApi';
+import { changePassword, getSystemStatusReport, purgeSystemHistory, type SystemStatusReport } from '../services/platformApi';
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeColor(value: string, fallback: string) {
+  const trimmed = value.trim();
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(trimmed) ? trimmed : fallback;
+}
 
 const DEFAULT_SETTINGS: SystemSettings = {
   id: 'system',
@@ -43,6 +56,25 @@ const DEFAULT_SETTINGS: SystemSettings = {
   receiptHeader: 'Thank you for shopping with us!',
   receiptFooter: 'Goods once sold are not returnable.',
   receiptAutoPrint: false,
+  receiptPaperWidthMm: 80,
+  receiptFontSizePx: 12,
+  receiptBrandColor: '#4f46e5',
+  receiptSaleTitle: 'SALE RECEIPT',
+  receiptRefundTitle: 'REFUND RECEIPT',
+  receiptCreditTitle: 'CREDIT PAYMENT RECEIPT',
+  receiptExpenseTitle: 'EXPENSE VOUCHER',
+  receiptShiftTitle: 'CASH SHIFT REPORT',
+  receiptShowBranchName: true,
+  receiptShowAddress: true,
+  receiptShowPhone: true,
+  receiptShowEmail: true,
+  receiptShowHeader: true,
+  receiptShowFooter: true,
+  receiptShowCashier: true,
+  receiptShowCustomer: true,
+  receiptShowReference: true,
+  receiptShowTaxLine: true,
+  receiptShowLoyaltySummary: true,
   drawerEnabled: false,
   drawerAutoOpenOnCashSale: false,
   drawerHelperUrl: 'http://127.0.0.1:17363',
@@ -69,6 +101,36 @@ export default function Settings() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [systemReport, setSystemReport] = useState<SystemStatusReport | null>(null);
+  const [isLoadingSystemReport, setIsLoadingSystemReport] = useState(false);
+  const [purgingScopeId, setPurgingScopeId] = useState<string | null>(null);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmLabel: 'Confirm',
+    onConfirm: () => {},
+    type: 'warning'
+  });
+
+  const refreshSystemReport = async () => {
+    setIsLoadingSystemReport(true);
+    try {
+      const report = await getSystemStatusReport();
+      setSystemReport(report);
+    } catch (error: any) {
+      toast.error(error.message || 'Unable to load cleanup controls');
+    } finally {
+      setIsLoadingSystemReport(false);
+    }
+  };
 
   useEffect(() => {
     const unsubBranches = onSnapshot(
@@ -96,6 +158,25 @@ export default function Settings() {
             taxRate: data.taxRate ?? 16,
             loyaltyPointRate: data.loyaltyPointRate ?? 100,
             receiptAutoPrint: data.receiptAutoPrint ?? false,
+            receiptPaperWidthMm: data.receiptPaperWidthMm ?? 80,
+            receiptFontSizePx: data.receiptFontSizePx ?? 12,
+            receiptBrandColor: data.receiptBrandColor || DEFAULT_SETTINGS.receiptBrandColor,
+            receiptSaleTitle: data.receiptSaleTitle || DEFAULT_SETTINGS.receiptSaleTitle,
+            receiptRefundTitle: data.receiptRefundTitle || DEFAULT_SETTINGS.receiptRefundTitle,
+            receiptCreditTitle: data.receiptCreditTitle || DEFAULT_SETTINGS.receiptCreditTitle,
+            receiptExpenseTitle: data.receiptExpenseTitle || DEFAULT_SETTINGS.receiptExpenseTitle,
+            receiptShiftTitle: data.receiptShiftTitle || DEFAULT_SETTINGS.receiptShiftTitle,
+            receiptShowBranchName: data.receiptShowBranchName ?? true,
+            receiptShowAddress: data.receiptShowAddress ?? true,
+            receiptShowPhone: data.receiptShowPhone ?? true,
+            receiptShowEmail: data.receiptShowEmail ?? true,
+            receiptShowHeader: data.receiptShowHeader ?? true,
+            receiptShowFooter: data.receiptShowFooter ?? true,
+            receiptShowCashier: data.receiptShowCashier ?? true,
+            receiptShowCustomer: data.receiptShowCustomer ?? true,
+            receiptShowReference: data.receiptShowReference ?? true,
+            receiptShowTaxLine: data.receiptShowTaxLine ?? true,
+            receiptShowLoyaltySummary: data.receiptShowLoyaltySummary ?? true,
             drawerEnabled: data.drawerEnabled ?? false,
             drawerAutoOpenOnCashSale: data.drawerAutoOpenOnCashSale ?? false,
             drawerHelperUrl: data.drawerHelperUrl || DEFAULT_SETTINGS.drawerHelperUrl,
@@ -112,6 +193,9 @@ export default function Settings() {
     };
 
     void fetchSettings();
+    if (user) {
+      void refreshSystemReport();
+    }
 
     return () => unsubBranches();
   }, [user]);
@@ -128,6 +212,25 @@ export default function Settings() {
         storeEmail: (settings.storeEmail || '').trim(),
         receiptHeader: (settings.receiptHeader || '').trim() || DEFAULT_SETTINGS.receiptHeader,
         receiptFooter: (settings.receiptFooter || '').trim() || DEFAULT_SETTINGS.receiptFooter,
+        receiptPaperWidthMm: clamp(Number(settings.receiptPaperWidthMm ?? 80), 58, 120),
+        receiptFontSizePx: clamp(Number(settings.receiptFontSizePx ?? 12), 9, 18),
+        receiptBrandColor: normalizeColor(settings.receiptBrandColor || '', DEFAULT_SETTINGS.receiptBrandColor || '#4f46e5'),
+        receiptSaleTitle: (settings.receiptSaleTitle || '').trim() || DEFAULT_SETTINGS.receiptSaleTitle,
+        receiptRefundTitle: (settings.receiptRefundTitle || '').trim() || DEFAULT_SETTINGS.receiptRefundTitle,
+        receiptCreditTitle: (settings.receiptCreditTitle || '').trim() || DEFAULT_SETTINGS.receiptCreditTitle,
+        receiptExpenseTitle: (settings.receiptExpenseTitle || '').trim() || DEFAULT_SETTINGS.receiptExpenseTitle,
+        receiptShiftTitle: (settings.receiptShiftTitle || '').trim() || DEFAULT_SETTINGS.receiptShiftTitle,
+        receiptShowBranchName: settings.receiptShowBranchName ?? true,
+        receiptShowAddress: settings.receiptShowAddress ?? true,
+        receiptShowPhone: settings.receiptShowPhone ?? true,
+        receiptShowEmail: settings.receiptShowEmail ?? true,
+        receiptShowHeader: settings.receiptShowHeader ?? true,
+        receiptShowFooter: settings.receiptShowFooter ?? true,
+        receiptShowCashier: settings.receiptShowCashier ?? true,
+        receiptShowCustomer: settings.receiptShowCustomer ?? true,
+        receiptShowReference: settings.receiptShowReference ?? true,
+        receiptShowTaxLine: settings.receiptShowTaxLine ?? true,
+        receiptShowLoyaltySummary: settings.receiptShowLoyaltySummary ?? true,
         drawerEnabled: Boolean(settings.drawerEnabled),
         drawerAutoOpenOnCashSale: Boolean(settings.drawerAutoOpenOnCashSale),
         drawerHelperUrl: (settings.drawerHelperUrl || DEFAULT_SETTINGS.drawerHelperUrl || '').trim() || DEFAULT_SETTINGS.drawerHelperUrl,
@@ -145,6 +248,7 @@ export default function Settings() {
       setSettings(updatedSettings);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
+      void refreshSystemReport();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'settings');
     } finally {
@@ -201,6 +305,7 @@ export default function Settings() {
     setIsTestingDrawer(true);
     try {
       await testCashDrawer(settings);
+      toast.success('Drawer test signal sent');
       try {
         await recordAuditLog(
           user!.uid,
@@ -218,11 +323,53 @@ export default function Settings() {
     }
   };
 
+  const requestHistoryPurge = (
+    scope: 'sales' | 'cash-shifts' | 'inventory' | 'expenses' | 'audit' | 'purchase-orders' | 'label-history' | 'all',
+    label: string,
+    warning: string
+  ) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: `Delete ${label}`,
+      message: `${warning} This action is irreversible and should only be used after exports or backups are complete.`,
+      confirmLabel: 'Delete History',
+      type: 'danger',
+      onConfirm: async () => {
+        setPurgingScopeId(scope);
+        try {
+          const result = await purgeSystemHistory({ scope });
+          const deletedSummary = Object.entries(result.deleted)
+            .filter(([, count]) => count > 0)
+            .map(([key, count]) => `${key}: ${count}`)
+            .join(', ');
+          toast.success(`Cleanup complete for ${label}`);
+          if (deletedSummary) {
+            toast.info(`Deleted ${deletedSummary}`);
+          }
+          void refreshSystemReport();
+        } catch (error: any) {
+          toast.error(error.message || 'Failed to delete history');
+        } finally {
+          setPurgingScopeId(null);
+        }
+      }
+    });
+  };
+
   return (
     <div className="route-workspace max-w-5xl mx-auto space-y-8">
+      <ConfirmDialog
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmLabel={confirmConfig.confirmLabel}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig((current) => ({ ...current, isOpen: false }))}
+        type={confirmConfig.type}
+      />
       <div className="route-header flex flex-col gap-1">
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500">Manage account security, branch defaults, receipt identity, scanner behavior, and cash drawer integration.</p>
+        <p className="text-sm text-gray-500">Manage account security, branch defaults, receipt appearance, scanner behavior, cash drawer integration, and controlled history cleanup.</p>
       </div>
 
       <div className="route-body desktop-scroll pr-1 custom-scrollbar">
@@ -371,6 +518,45 @@ export default function Settings() {
               <h2 className="text-xl font-bold text-gray-900">Receipt Layout</h2>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <LabeledField label="Paper Width (mm)">
+                <input
+                  type="number"
+                  min="58"
+                  max="120"
+                  value={settings.receiptPaperWidthMm ?? 80}
+                  onChange={(event) => setSettings({ ...settings, receiptPaperWidthMm: parseInt(event.target.value, 10) || 80 })}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-mono"
+                />
+              </LabeledField>
+              <LabeledField label="Base Font Size (px)">
+                <input
+                  type="number"
+                  min="9"
+                  max="18"
+                  value={settings.receiptFontSizePx ?? 12}
+                  onChange={(event) => setSettings({ ...settings, receiptFontSizePx: parseInt(event.target.value, 10) || 12 })}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-mono"
+                />
+              </LabeledField>
+              <LabeledField label="Brand Color">
+                <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+                  <input
+                    type="color"
+                    value={settings.receiptBrandColor || DEFAULT_SETTINGS.receiptBrandColor}
+                    onChange={(event) => setSettings({ ...settings, receiptBrandColor: event.target.value })}
+                    className="h-10 w-14 rounded-xl border border-gray-200 bg-white p-1"
+                  />
+                  <input
+                    type="text"
+                    value={settings.receiptBrandColor || ''}
+                    onChange={(event) => setSettings({ ...settings, receiptBrandColor: event.target.value })}
+                    className="w-full bg-transparent font-mono outline-none"
+                  />
+                </div>
+              </LabeledField>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <LabeledField label="Receipt Header">
                 <textarea
@@ -388,17 +574,141 @@ export default function Settings() {
               </LabeledField>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              <LabeledField label="Sale Title">
+                <input
+                  type="text"
+                  value={settings.receiptSaleTitle || ''}
+                  onChange={(event) => setSettings({ ...settings, receiptSaleTitle: event.target.value })}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </LabeledField>
+              <LabeledField label="Refund Title">
+                <input
+                  type="text"
+                  value={settings.receiptRefundTitle || ''}
+                  onChange={(event) => setSettings({ ...settings, receiptRefundTitle: event.target.value })}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </LabeledField>
+              <LabeledField label="Credit Title">
+                <input
+                  type="text"
+                  value={settings.receiptCreditTitle || ''}
+                  onChange={(event) => setSettings({ ...settings, receiptCreditTitle: event.target.value })}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </LabeledField>
+              <LabeledField label="Expense Title">
+                <input
+                  type="text"
+                  value={settings.receiptExpenseTitle || ''}
+                  onChange={(event) => setSettings({ ...settings, receiptExpenseTitle: event.target.value })}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </LabeledField>
+              <LabeledField label="Shift Report Title">
+                <input
+                  type="text"
+                  value={settings.receiptShiftTitle || ''}
+                  onChange={(event) => setSettings({ ...settings, receiptShiftTitle: event.target.value })}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </LabeledField>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-gray-600 uppercase tracking-wider">
+                <Palette className="w-4 h-4" />
+                Receipt Visibility Controls
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <ToggleField
+                  label="Show Branch Name"
+                  description="Print branch or till branch name on receipts."
+                  checked={settings.receiptShowBranchName ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowBranchName: checked })}
+                />
+                <ToggleField
+                  label="Show Address"
+                  description="Print address lines from branch or system settings."
+                  checked={settings.receiptShowAddress ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowAddress: checked })}
+                />
+                <ToggleField
+                  label="Show Phone"
+                  description="Print phone number on receipts."
+                  checked={settings.receiptShowPhone ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowPhone: checked })}
+                />
+                <ToggleField
+                  label="Show Email"
+                  description="Print contact email if available."
+                  checked={settings.receiptShowEmail ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowEmail: checked })}
+                />
+                <ToggleField
+                  label="Show Header"
+                  description="Show the customizable header message."
+                  checked={settings.receiptShowHeader ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowHeader: checked })}
+                />
+                <ToggleField
+                  label="Show Footer"
+                  description="Show the customizable footer message."
+                  checked={settings.receiptShowFooter ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowFooter: checked })}
+                />
+                <ToggleField
+                  label="Show Cashier"
+                  description="Print cashier name on receipts."
+                  checked={settings.receiptShowCashier ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowCashier: checked })}
+                />
+                <ToggleField
+                  label="Show Customer"
+                  description="Print customer name when a customer is attached."
+                  checked={settings.receiptShowCustomer ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowCustomer: checked })}
+                />
+                <ToggleField
+                  label="Show Reference"
+                  description="Print sale, payment or voucher references."
+                  checked={settings.receiptShowReference ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowReference: checked })}
+                />
+                <ToggleField
+                  label="Show Tax Line"
+                  description="Include VAT/tax breakdown on receipts."
+                  checked={settings.receiptShowTaxLine ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowTaxLine: checked })}
+                />
+                <ToggleField
+                  label="Show Loyalty Summary"
+                  description="Show earned points where relevant."
+                  checked={settings.receiptShowLoyaltySummary ?? true}
+                  onChange={(checked) => setSettings({ ...settings, receiptShowLoyaltySummary: checked })}
+                />
+                <ToggleField
+                  label="Auto Print"
+                  description="Print automatically after checkout on dedicated tills."
+                  checked={settings.receiptAutoPrint ?? false}
+                  onChange={(checked) => setSettings({ ...settings, receiptAutoPrint: checked })}
+                />
+              </div>
+            </div>
+
             <label className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
               <div>
-                <p className="text-sm font-bold text-gray-900">Auto-print receipts after checkout</p>
-                <p className="text-xs text-gray-500">Useful on dedicated cashier terminals with thermal printers.</p>
+                <p className="text-sm font-bold text-gray-900">Receipt designer note</p>
+                <p className="text-xs text-gray-500">All receipt title, color, sizing and visibility controls above apply without touching code.</p>
               </div>
-              <input
-                type="checkbox"
-                checked={settings.receiptAutoPrint ?? false}
-                onChange={(event) => setSettings({ ...settings, receiptAutoPrint: event.target.checked })}
-                className="h-5 w-5 accent-indigo-600"
-              />
+              <span
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl text-white"
+                style={{ backgroundColor: settings.receiptBrandColor || DEFAULT_SETTINGS.receiptBrandColor }}
+              >
+                <Printer className="h-4 w-4" />
+              </span>
             </label>
           </section>
 
@@ -566,6 +876,71 @@ export default function Settings() {
         </form>
       </div>
 
+      <div className="bg-white rounded-3xl p-8 shadow-sm border border-red-100 space-y-6">
+        <div className="flex items-center gap-3 pb-4 border-b border-red-50">
+          <Trash2 className="w-5 h-5 text-red-600" />
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">History Cleanup</h2>
+            <p className="text-sm text-gray-500">Delete selected history trails without touching master records like products, branches, suppliers, or users.</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+          Cleanup is permanent. Use exports and reports first, then delete only the history scope you truly want to remove.
+        </div>
+
+        {isLoadingSystemReport && !systemReport ? (
+          <div className="flex items-center gap-3 text-sm text-gray-500">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+            Loading cleanup scopes...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {systemReport?.historyScopes.map((scope) => (
+              <div key={scope.id} className="rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-sm font-bold text-gray-900">{scope.label}</h3>
+                      <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                        {scope.recordCount} record{scope.recordCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600">{scope.description}</p>
+                    <p className="text-xs font-medium text-amber-700">{scope.warning}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => requestHistoryPurge(scope.id, scope.label, scope.warning)}
+                    disabled={purgingScopeId !== null}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {purgingScopeId === scope.id ? 'Deleting...' : 'Delete History'}
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            <div className="rounded-2xl border border-red-200 bg-white px-5 py-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-red-700">Delete All Supported History</h3>
+                  <p className="mt-1 text-sm text-gray-600">Removes sales, shifts, inventory ledger, expenses, audit trail, purchase orders, and label history in one action.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => requestHistoryPurge('all', 'all history', 'This will wipe every supported history group in the system.')}
+                  disabled={purgingScopeId !== null}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 px-5 py-3 text-sm font-bold text-red-700 transition-all hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {purgingScopeId === 'all' ? 'Deleting...' : 'Delete Everything Listed'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="bg-indigo-50 rounded-3xl p-8 border border-indigo-100">
         <h3 className="text-lg font-bold text-indigo-900 mb-2">Production Tip</h3>
         <p className="text-sm text-indigo-700 leading-relaxed">
@@ -625,5 +1000,32 @@ function LabeledField({
       <label className="text-sm font-bold text-gray-600 uppercase tracking-wider">{label}</label>
       {children}
     </div>
+  );
+}
+
+function ToggleField({
+  label,
+  description,
+  checked,
+  onChange
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+      <div>
+        <p className="text-sm font-bold text-gray-900">{label}</p>
+        <p className="text-xs text-gray-500">{description}</p>
+      </div>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="h-5 w-5 shrink-0 accent-indigo-600"
+      />
+    </label>
   );
 }
