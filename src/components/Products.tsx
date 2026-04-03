@@ -22,6 +22,55 @@ import { recordAuditLog } from '../services/auditService';
 import { toast } from 'sonner';
 import ConfirmDialog from './ConfirmDialog';
 
+type ProductFormState = {
+  name: string;
+  sku: string;
+  barcode: string;
+  categoryId: string;
+  supplierId: string;
+  buyingPrice: number;
+  sellingPrice: number;
+  stockQuantity: number;
+  unitType: string;
+  lowStockThreshold: number;
+  isHotItem: boolean;
+  expiryDate?: string;
+};
+
+function createEmptyProductForm(): ProductFormState {
+  return {
+    name: '',
+    sku: '',
+    barcode: '',
+    categoryId: '',
+    supplierId: '',
+    buyingPrice: 0,
+    sellingPrice: 0,
+    stockQuantity: 0,
+    unitType: 'pcs',
+    lowStockThreshold: 5,
+    isHotItem: false,
+    expiryDate: ''
+  };
+}
+
+function mapProductToForm(product: Product): ProductFormState {
+  return {
+    name: product.name || '',
+    sku: product.sku || '',
+    barcode: product.barcode || '',
+    categoryId: product.categoryId || '',
+    supplierId: product.supplierId || '',
+    buyingPrice: Number(product.buyingPrice ?? 0),
+    sellingPrice: Number(product.sellingPrice ?? 0),
+    stockQuantity: Number(product.stockQuantity ?? 0),
+    unitType: product.unitType || 'pcs',
+    lowStockThreshold: Number(product.lowStockThreshold ?? 5),
+    isHotItem: Boolean(product.isHotItem),
+    expiryDate: product.expiryDate || ''
+  };
+}
+
 export default function Products() {
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -62,33 +111,7 @@ export default function Products() {
     fetchSettings();
   }, []);
   
-  const [formData, setFormData] = useState<{
-    name: string;
-    sku: string;
-    barcode: string;
-    categoryId: string;
-    supplierId: string;
-    buyingPrice: number;
-    sellingPrice: number;
-    stockQuantity: number;
-    unitType: string;
-    lowStockThreshold: number;
-    isHotItem: boolean;
-    expiryDate?: string;
-  }>({
-    name: '',
-    sku: '',
-    barcode: '',
-    categoryId: '',
-    supplierId: '',
-    buyingPrice: 0,
-    sellingPrice: 0,
-    stockQuantity: 0,
-    unitType: 'pcs',
-    lowStockThreshold: 5,
-    isHotItem: false,
-    expiryDate: ''
-  });
+  const [formData, setFormData] = useState<ProductFormState>(createEmptyProductForm);
 
   useEffect(() => {
     if (!user) return;
@@ -217,6 +240,20 @@ export default function Products() {
 
       if (editingProduct) {
         await updateDoc(doc(db, 'products', editingProduct.id), data);
+        setProducts(prev =>
+          prev.map(product =>
+            product.id === editingProduct.id
+              ? {
+                  ...product,
+                  ...data,
+                  categoryId: data.categoryId || '',
+                  supplierId: data.supplierId || '',
+                  expiryDate: data.expiryDate || undefined,
+                  updatedAt: data.updatedAt
+                }
+              : product
+          )
+        );
         await recordAuditLog(user.uid, user.displayName || user.username, 'UPDATE_PRODUCT', `Updated product: ${data.name} (SKU: ${data.sku})`);
         toast.success('Product updated successfully');
       } else {
@@ -229,28 +266,22 @@ export default function Products() {
       }
       resetForm();
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'products');
-      toast.error('Failed to save product');
+      const message = error instanceof Error ? error.message : 'Failed to save product';
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          handleFirestoreError(error, OperationType.WRITE, 'products');
+        } catch {
+          // The product form already surfaces the user-facing error below.
+        }
+      }
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }
   };
 
   const resetForm = () => {
-    setFormData({
-      name: '',
-      sku: '',
-      barcode: '',
-      categoryId: '',
-      supplierId: '',
-      buyingPrice: 0,
-      sellingPrice: 0,
-      stockQuantity: 0,
-      unitType: 'pcs',
-      lowStockThreshold: 5,
-      isHotItem: false,
-      expiryDate: ''
-    });
+    setFormData(createEmptyProductForm());
     setEditingProduct(null);
   };
 
@@ -545,20 +576,7 @@ export default function Products() {
                         <button 
                           onClick={() => {
                             setEditingProduct(product);
-                            setFormData({
-                              name: product.name,
-                              sku: product.sku,
-                              barcode: product.barcode,
-                              categoryId: product.categoryId,
-                              supplierId: product.supplierId,
-                              buyingPrice: product.buyingPrice,
-                              sellingPrice: product.sellingPrice,
-                              stockQuantity: product.stockQuantity,
-                              unitType: product.unitType,
-                              lowStockThreshold: product.lowStockThreshold,
-                              isHotItem: product.isHotItem,
-                              expiryDate: product.expiryDate || ''
-                            });
+                            setFormData(mapProductToForm(product));
                           }}
                           className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg hover:bg-indigo-100 transition-colors"
                         >
