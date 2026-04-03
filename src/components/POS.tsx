@@ -596,7 +596,7 @@ export default function POS() {
   };
 
   return (
-    <div className="route-workspace max-w-6xl mx-auto space-y-8">
+    <div className="route-workspace max-w-6xl mx-auto space-y-6">
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
@@ -605,19 +605,19 @@ export default function POS() {
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
         type={confirmConfig.type}
       />
-      <div className="route-header space-y-4">
+      <div className="route-header space-y-3">
       <div className="flex flex-col gap-1">
-        <p className="text-sm text-indigo-600 font-medium">Fast checkout workflow with scanner-first input and real-time totals.</p>
+        <p className="text-xs text-indigo-600 font-medium uppercase tracking-[0.18em]">Fast checkout workflow with scanner-first input and real-time totals.</p>
         <h1 className="text-2xl font-bold text-gray-900">New Sale</h1>
       </div>
 
-      <div className={`rounded-3xl border px-6 py-5 ${currentShift ? 'border-emerald-100 bg-emerald-50' : 'border-amber-100 bg-amber-50'}`}>
+      <div className={`rounded-3xl border px-5 py-4 ${currentShift ? 'border-emerald-100 bg-emerald-50' : 'border-amber-100 bg-amber-50'}`}>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className={`text-xs font-bold uppercase tracking-[0.24em] ${currentShift ? 'text-emerald-700' : 'text-amber-700'}`}>
               {currentShift ? 'Cashier Shift Active' : 'Shift Required'}
             </p>
-            <p className={`mt-2 text-sm font-semibold ${currentShift ? 'text-emerald-900' : 'text-amber-900'}`}>
+            <p className={`mt-1.5 text-sm font-semibold ${currentShift ? 'text-emerald-900' : 'text-amber-900'}`}>
               {currentShift
                 ? `${currentBranchName} • Expected drawer cash KES ${(shiftSummary?.expectedCash || currentShift.openingFloat || 0).toLocaleString()}`
                 : 'Open a cashier shift from the Cash Shifts page before processing sales.'}
@@ -626,7 +626,7 @@ export default function POS() {
           <button
             type="button"
             onClick={() => window.location.assign('/cash-shifts')}
-            className={`inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold transition-all ${currentShift ? 'bg-white text-emerald-700 hover:bg-emerald-100' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
+            className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-bold transition-all ${currentShift ? 'bg-white text-emerald-700 hover:bg-emerald-100' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
           >
             {currentShift ? 'View Shift Controls' : 'Open Shift Controls'}
           </button>
@@ -636,13 +636,13 @@ export default function POS() {
       </div>
 
       <div className="route-body">
-        <div className="route-grid grid grid-cols-1 items-stretch gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(21rem,0.95fr)]">
+        <div className="route-grid grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(19rem,0.9fr)]">
         {/* Left: Sale Details */}
           <div className="desktop-card">
-            <div className="desktop-card bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6">
+            <div className="desktop-card bg-white rounded-3xl p-6 shadow-sm border border-gray-100 space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <ShoppingCart className="w-6 h-6 text-indigo-600" />
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5 text-indigo-600" />
                 Current Cart
               </h2>
               <div className="flex items-center gap-4">
@@ -663,7 +663,7 @@ export default function POS() {
               </div>
             </div>
           
-          <div className="space-y-5">
+          <div className="space-y-4">
             <form onSubmit={handleScan} className="space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-sm font-medium text-gray-600">Scan Barcode</label>
@@ -681,7 +681,7 @@ export default function POS() {
                   value={barcodeInput}
                   onChange={(e) => setBarcodeInput(e.target.value)}
                   placeholder="Scan or type barcode, then press Enter"
-                  className={`w-full px-4 py-4 bg-gray-50 border-2 rounded-2xl outline-none transition-all placeholder:text-gray-400 text-lg font-mono ${
+                  className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-2xl outline-none transition-all placeholder:text-gray-400 text-base font-mono ${
                     isScannerFocused ? 'border-indigo-500 ring-4 ring-indigo-50' : 'border-gray-200'
                   }`}
                 />
@@ -703,7 +703,7 @@ export default function POS() {
                     value={quickSearchQuery}
                     onChange={(e) => setQuickSearchQuery(e.target.value)}
                     placeholder="Type product name or SKU (e.g. cigarette, sweet)"
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-gray-500"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-gray-500"
                   />
                 </div>
 
@@ -738,12 +738,12 @@ export default function POS() {
             </div>
           </div>
 
-          <div className="desktop-card space-y-4">
-            <div className="grid grid-cols-12 gap-4 pb-2 border-b border-gray-100 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+          <div className="desktop-card space-y-3">
+            <div className="grid grid-cols-12 gap-3 pb-2 border-b border-gray-100 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
               <div className="col-span-6">ITEM</div>
-              <div className="col-span-2 text-center">QTY</div>
-              <div className="col-span-2 text-right">PRICE</div>
-              <div className="col-span-2 text-right">TOTAL</div>
+              <div className="col-span-3 text-center">QTY</div>
+              <div className="col-span-2 text-right">AMOUNT</div>
+              <div className="col-span-1 text-right">X</div>
             </div>
 
             <div className="desktop-list-scroll space-y-4 min-h-0 pr-1 custom-scrollbar">
@@ -751,9 +751,9 @@ export default function POS() {
                 <p className="text-gray-600 py-8 text-center font-medium">Cart is empty — scan a product to begin.</p>
               ) : (
                 cart.map(item => (
-                  <div key={item.id} className="grid grid-cols-12 gap-4 items-center group bg-gray-50/50 p-2 rounded-xl border border-transparent hover:border-indigo-100 transition-all">
-                    <div className="col-span-5">
-                      <h3 className="font-bold text-gray-900 truncate">{item.name}</h3>
+                  <div key={item.id} className="grid grid-cols-12 gap-3 items-center group bg-gray-50/50 p-2 rounded-xl border border-transparent hover:border-indigo-100 transition-all">
+                    <div className="col-span-6">
+                      <h3 className="text-sm font-bold text-gray-900 truncate">{item.name}</h3>
                       <p className="text-[10px] text-gray-500">{item.sku}</p>
                     </div>
                     <div className="col-span-3 flex justify-center">
@@ -771,7 +771,7 @@ export default function POS() {
                     <div className="col-span-2 text-right text-sm font-bold text-gray-900">
                       {(item.sellingPrice * item.quantity).toLocaleString()}
                     </div>
-                    <div className="col-span-2 flex justify-end">
+                    <div className="col-span-1 flex justify-end">
                       <button 
                         onClick={() => removeFromCart(item.id)}
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
@@ -789,28 +789,32 @@ export default function POS() {
         </div>
 
         {/* Right: Checkout Panel */}
-        <div className="desktop-card bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6">
-          <h2 className="text-3xl font-bold text-gray-900">Checkout</h2>
+        <div className="desktop-card self-start bg-white rounded-3xl p-6 shadow-sm border border-gray-100 space-y-4 lg:sticky lg:top-0">
+          <h2 className="text-2xl font-bold text-gray-900">Checkout</h2>
 
           <div className="space-y-2 shrink-0">
             <div className="flex justify-between text-gray-600">
-              <span className="text-lg">Subtotal: KES {subtotal.toLocaleString()}</span>
+              <span className="text-sm font-medium">Subtotal</span>
+              <span className="text-sm font-semibold">KES {subtotal.toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-gray-600">
-              <span className="text-lg">VAT ({taxRate}%): KES {taxAmount.toLocaleString()}</span>
+              <span className="text-sm font-medium">VAT ({taxRate}%)</span>
+              <span className="text-sm font-semibold">KES {taxAmount.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-2xl font-bold text-gray-900 pt-2 border-t border-gray-100">
-              <span>Total: <span className="text-indigo-600">KES {total.toLocaleString()}</span></span>
+            <div className="flex justify-between text-xl font-bold text-gray-900 pt-2 border-t border-gray-100">
+              <span>Total</span>
+              <span className="text-indigo-600">KES {total.toLocaleString()}</span>
             </div>
           </div>
 
-          <div className="desktop-form-scroll space-y-5 pr-1 custom-scrollbar">
+          <div className="desktop-form-scroll pr-1 custom-scrollbar">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">Payment Method</label>
               <select 
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value as any)}
-                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700"
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700"
               >
                 <option value="cash">Cash</option>
                 <option value="mpesa">M-Pesa</option>
@@ -827,7 +831,7 @@ export default function POS() {
                 <select
                   value={depositMethod}
                   onChange={(e) => setDepositMethod(e.target.value as 'cash' | 'mpesa' | 'card')}
-                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700"
                 >
                   <option value="cash">Cash</option>
                   <option value="mpesa">M-Pesa</option>
@@ -837,15 +841,15 @@ export default function POS() {
             )}
 
             {checkoutCreditAmount > 0 && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:col-span-2">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700">Credit Detected</p>
-                <p className="mt-2 font-semibold">
+                <p className="mt-1.5 font-semibold">
                   KES {checkoutCreditAmount.toLocaleString()} will be recorded as customer credit and tracked across the system.
                 </p>
               </div>
             )}
 
-            <div className="space-y-2 relative" ref={customerSearchRef}>
+            <div className="space-y-2 relative md:col-span-2" ref={customerSearchRef}>
               <div className="flex justify-between items-center">
                 <label className="text-sm font-medium text-gray-700">
                   Customer Search {checkoutCreditAmount > 0 && <span className="text-amber-600">(required for credit)</span>}
@@ -882,7 +886,7 @@ export default function POS() {
                   }}
                   onFocus={() => setShowCustomerDropdown(true)}
                   placeholder="Search customer by name, code or phone..."
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500 text-sm"
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500 text-sm"
                 />
               </div>
 
@@ -931,7 +935,7 @@ export default function POS() {
                   setCustomerId('');
                 }}
                 placeholder="e.g. Jane Njeri"
-                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500"
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500"
               />
             </div>
 
@@ -947,24 +951,24 @@ export default function POS() {
                 }}
                 onFocus={(e) => e.target.select()}
                 autoComplete="off"
-                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-lg"
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-base"
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-2">
               <label className="text-sm font-medium text-gray-700">Reference (optional)</label>
               <input 
                 type="text"
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
-                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
               />
             </div>
 
             <button 
               onClick={handleCheckout}
               disabled={isProcessing || cart.length === 0 || !currentShift}
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
+              className="w-full md:col-span-2 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
             >
               {isProcessing ? (
                 <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -972,6 +976,7 @@ export default function POS() {
                 'Complete Checkout'
               )}
             </button>
+            </div>
           </div>
         </div>
       </div>

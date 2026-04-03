@@ -187,80 +187,109 @@
   }
 
   .app-shell .space-y-8 > :not([hidden]) ~ :not([hidden]) {
-    margin-top: 1.25rem !important;
-  }
-
-  .app-shell .space-y-6 > :not([hidden]) ~ :not([hidden]) {
     margin-top: 1rem !important;
   }
 
-  .app-shell .gap-8 {
-    gap: 1.25rem !important;
+  .app-shell .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem !important;
   }
 
-  .app-shell .gap-6 {
+  .app-shell .gap-8 {
     gap: 1rem !important;
   }
 
-  .app-shell .p-8 {
-    padding: 1.25rem !important;
+  .app-shell .gap-6 {
+    gap: 0.75rem !important;
   }
 
-  .app-shell .p-6 {
+  .app-shell .gap-4 {
+    gap: 0.65rem !important;
+  }
+
+  .app-shell .p-8 {
     padding: 1rem !important;
   }
 
-  .app-shell .px-8 {
-    padding-left: 1.25rem !important;
-    padding-right: 1.25rem !important;
+  .app-shell .p-6 {
+    padding: 0.875rem !important;
   }
 
-  .app-shell .px-6 {
+  .app-shell .p-4 {
+    padding: 0.75rem !important;
+  }
+
+  .app-shell .px-8 {
     padding-left: 1rem !important;
     padding-right: 1rem !important;
   }
 
+  .app-shell .px-6 {
+    padding-left: 0.875rem !important;
+    padding-right: 0.875rem !important;
+  }
+
+  .app-shell .px-4 {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
   .app-shell .py-6 {
-    padding-top: 1rem !important;
-    padding-bottom: 1rem !important;
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
   }
 
   .app-shell .py-4 {
-    padding-top: 0.75rem !important;
-    padding-bottom: 0.75rem !important;
+    padding-top: 0.625rem !important;
+    padding-bottom: 0.625rem !important;
   }
 
   .app-shell .py-3\.5 {
-    padding-top: 0.65rem !important;
-    padding-bottom: 0.65rem !important;
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+  }
+
+  .app-shell .py-3 {
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
   }
 
   .app-shell .text-3xl {
-    font-size: 1.75rem !important;
-    line-height: 2rem !important;
+    font-size: 1.5rem !important;
+    line-height: 1.8rem !important;
   }
 
   .app-shell .text-2xl {
-    font-size: 1.375rem !important;
-    line-height: 1.75rem !important;
+    font-size: 1.25rem !important;
+    line-height: 1.55rem !important;
   }
 
   .app-shell .text-xl {
-    font-size: 1.125rem !important;
-    line-height: 1.5rem !important;
+    font-size: 1rem !important;
+    line-height: 1.35rem !important;
+  }
+
+  .app-shell .text-lg {
+    font-size: 0.925rem !important;
+    line-height: 1.25rem !important;
   }
 
   .app-shell .rounded-4xl {
-    border-radius: 1.5rem !important;
+    border-radius: 1.25rem !important;
   }
 
   .app-shell .rounded-3xl {
-    border-radius: 1.25rem !important;
+    border-radius: 1rem !important;
   }
 
   .app-shell table th,
   .app-shell table td {
-    padding-top: 0.85rem !important;
-    padding-bottom: 0.85rem !important;
+    padding-top: 0.65rem !important;
+    padding-bottom: 0.65rem !important;
+  }
+
+  .app-shell input,
+  .app-shell select,
+  .app-shell textarea {
+    font-size: 0.875rem;
   }
 }
