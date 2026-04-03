@@ -442,21 +442,25 @@ export default function Inventory() {
         {/* Right: Overview & Transactions */}
         <div className="lg:col-span-8 desktop-card space-y-6">
           <div className="desktop-card bg-white p-8 rounded-3xl shadow-sm border border-gray-100 min-h-0">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-xl font-bold text-gray-900">Stock Levels</h3>
-              <div className="relative w-72">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
-                <input 
-                  type="text"
-                  placeholder="Search products..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600 transition-all"
-                />
+            <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm space-y-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Stock Levels</h3>
+                  <p className="text-xs text-gray-500">Live product quantities in a fixed inventory container.</p>
+                </div>
+                <div className="relative w-full lg:w-72">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
+                  <input 
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-600 transition-all"
+                  />
+                </div>
               </div>
-            </div>
-            <div className="desktop-table-scroll overflow-x-auto min-h-0 max-h-[30rem] overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
-              <table className="w-full text-left">
+              <div className="desktop-table-scroll overflow-x-auto min-h-0 max-h-150 overflow-y-auto pr-2 custom-scrollbar border border-gray-100 rounded-2xl shadow-inner bg-gray-50/30">
+                <table className="w-full text-left">
                 <thead className="sticky top-0 bg-white z-10 shadow-sm text-[10px] uppercase font-bold text-gray-600 tracking-widest border-b border-gray-100">
                   <tr className="bg-white">
                     <th className="py-4 px-4">Product</th>
@@ -465,33 +469,42 @@ export default function Inventory() {
                     <th className="py-4 px-4 text-center">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {filteredProducts.map(p => (
-                    <tr key={p.id} className="group hover:bg-indigo-50/30 transition-colors">
-                      <td className="py-4 px-4">
-                        <p className="text-sm font-bold text-gray-900">{p.name}</p>
-                        <p className="text-xs text-gray-500 font-medium">{p.barcode}</p>
-                      </td>
-                      <td className="py-4 px-4 text-sm text-gray-500 font-mono font-bold">{p.sku}</td>
-                      <td className="py-4 px-4 text-sm font-black text-right text-indigo-600">{p.stockQuantity.toLocaleString()} {p.unitType}</td>
-                      <td className="py-4 px-4">
-                        <div className="flex justify-center">
-                          {p.stockQuantity <= (p.lowStockThreshold || 5) ? (
-                            <span className="px-3 py-1 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1.5 border border-red-100">
-                              <AlertTriangle className="w-3 h-3" />
-                              Low Stock
-                            </span>
-                          ) : (
-                            <span className="px-3 py-1 bg-green-50 text-green-600 rounded-lg text-[10px] font-bold uppercase border border-green-100">
-                              In Stock
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {filteredProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-10 text-center text-sm font-medium text-gray-400">
+                          No stock levels match your search.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredProducts.map(p => (
+                        <tr key={p.id} className="group hover:bg-indigo-50/30 transition-colors">
+                          <td className="py-4 px-4">
+                            <p className="text-sm font-bold text-gray-900">{p.name}</p>
+                            <p className="text-xs text-gray-500 font-medium">{p.barcode}</p>
+                          </td>
+                          <td className="py-4 px-4 text-sm text-gray-500 font-mono font-bold">{p.sku}</td>
+                          <td className="py-4 px-4 text-sm font-black text-right text-indigo-600">{p.stockQuantity.toLocaleString()} {p.unitType}</td>
+                          <td className="py-4 px-4">
+                            <div className="flex justify-center">
+                              {p.stockQuantity <= (p.lowStockThreshold || 5) ? (
+                                <span className="px-3 py-1 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1.5 border border-red-100">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Low Stock
+                                </span>
+                              ) : (
+                                <span className="px-3 py-1 bg-green-50 text-green-600 rounded-lg text-[10px] font-bold uppercase border border-green-100">
+                                  In Stock
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 

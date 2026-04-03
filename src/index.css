@@ -153,6 +153,7 @@
 
     .app-shell .desktop-scroll,
     .app-shell .desktop-form-scroll,
+    .app-shell .desktop-panel-scroll,
     .app-shell .desktop-list-scroll,
     .app-shell .desktop-table-scroll {
       flex: 0 0 auto;
@@ -167,6 +168,12 @@
     .app-shell .desktop-form-scroll,
     .app-shell .desktop-list-scroll {
       overflow: visible !important;
+    }
+
+    .app-shell .desktop-panel-scroll {
+      max-height: min(34rem, calc(100vh - 15rem)) !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
     }
 
     .app-shell .desktop-list-scroll {

@@ -340,25 +340,27 @@ export default function Products() {
       <div className="route-grid grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
         {/* Add Product Form */}
         <div className="xl:col-span-5 desktop-card bg-white p-8 rounded-4xl shadow-sm border border-gray-100">
-          <div className="flex justify-between items-start mb-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-5">
             <h2 className="text-2xl font-bold text-gray-900">
               {editingProduct ? 'Edit Product' : 'Add Product'}
             </h2>
             <button 
               type="button"
               onClick={generateCodes}
-              className="bg-indigo-600 text-white px-4 py-3 rounded-xl text-sm font-bold leading-tight hover:bg-indigo-700 transition-colors w-24 text-center"
+              className="bg-indigo-600 text-white px-4 py-3 rounded-xl text-xs font-bold leading-tight hover:bg-indigo-700 transition-colors w-full lg:w-28 text-center shrink-0"
             >
               Auto Generate Codes
             </button>
           </div>
 
-          <p className="text-sm text-gray-500 mb-8 leading-relaxed">
-            Use existing manufacturer barcode when available. Generate only if product has no barcode.
-          </p>
+          <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+            <p className="text-xs font-medium text-indigo-900 leading-relaxed">
+              Use the manufacturer barcode when it exists. Generate codes only for new unlabeled products.
+            </p>
+          </div>
 
-          <form onSubmit={handleSubmit} className="desktop-form-scroll space-y-6 pr-1 custom-scrollbar">
-            <div className="grid grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className="desktop-panel-scroll space-y-4 pr-1 custom-scrollbar">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Name</label>
                 <input 
@@ -379,9 +381,6 @@ export default function Products() {
                   className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Barcode</label>
                 <input 
@@ -400,9 +399,6 @@ export default function Products() {
                   <option>UPC-A</option>
                 </select>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Category</label>
                 <select 
@@ -425,9 +421,6 @@ export default function Products() {
                   {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Buying Price</label>
                 <input 
@@ -448,9 +441,6 @@ export default function Products() {
                   className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Stock Qty</label>
                 <input 
@@ -471,9 +461,6 @@ export default function Products() {
                   className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">Unit</label>
                 <input 
@@ -484,19 +471,22 @@ export default function Products() {
                   className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 />
               </div>
-              <div className="flex items-center gap-2 pt-6">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-gray-700">Quick-Add Item</p>
+                  <p className="text-xs text-gray-500">Make this product easier to pick during sale.</p>
+                </div>
                 <input 
                   type="checkbox"
                   id="isHotItem"
                   checked={formData.isHotItem}
                   onChange={e => setFormData({...formData, isHotItem: e.target.checked})}
-                  className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  className="w-5 h-5 shrink-0 text-indigo-600 rounded focus:ring-indigo-500"
                 />
-                <label htmlFor="isHotItem" className="text-sm font-bold text-gray-700">Quick-Add Item (Sale)</label>
               </div>
             </div>
 
-            <div className="pt-4 flex gap-4">
+            <div className="sticky bottom-0 bg-white pt-3 flex gap-4">
               <button 
                 type="submit"
                 disabled={isSaving}
